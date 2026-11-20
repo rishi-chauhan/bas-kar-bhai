@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bas Kar Bhai · Settings</title>
+  <link rel="stylesheet" href="../lib/theme.css" />
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="tape"></div>
+  <div class="wrap">
+    <header>
+      <div class="brand"><span>Bas Kar Bhai</span><span class="hi" lang="hi">बस कर भाई</span></div>
+      <p class="muted">Set a limit. Blow past it. Get blasted at full volume. Close the tab out of shame.</p>
+    </header>
+
+    <section class="card">
+      <h2>1 · Your weaknesses</h2>
+      <p class="muted">Daily limits. A limit on <code>youtube.com</code> also covers <code>m.youtube.com</code>, <code>music.youtube.com</code> and friends.</p>
+      <ul id="limits" class="limits"></ul>
+      <form id="addForm" class="add">
+        <input id="addSite" type="text" placeholder="reddit.com" aria-label="Website" autocomplete="off" />
+        <input id="addMinutes" type="number" min="1" max="1440" value="20" aria-label="Minutes per day" />
+        <span class="muted">min/day</span>
+        <button type="submit">Add</button>
+      </form>
+      <p id="addError" class="error" hidden></p>
+      <div class="chips" id="chips"></div>
+    </section>
+
+    <section class="card">
+      <h2>2 · The blast</h2>
+      <div class="choices">
+        <label><input type="radio" name="video" value="default" /> The bundled siren (<em>BAS KAR BHAI!</em>)</label>
+        <label><input type="radio" name="video" value="custom" id="customRadio" /> My own video</label>
+      </div>
+      <div class="upload">
+        <label class="btn ghost" for="file">Upload a video…</label>
+        <input id="file" type="file" accept="video/*,audio/*" hidden />
+        <span id="customName" class="muted">No custom video yet.</span>
+        <button id="removeCustom" class="ghost small" hidden>Remove</button>
+      </div>
+      <video id="preview" controls playsinline></video>
+      <div class="row">
+        <button id="test" class="danger">Test the blast 🔊</button>
+        <span class="muted">Turn your volume up first. That's the point.</span>
+      </div>
+      <p class="note">
+        Heads up: browsers aren't allowed to change your <em>system</em> volume. The video plays at 100%
+        of whatever your computer is set to, and pauses everything else on the page so nothing drowns it out.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>3 · How mean should it be?</h2>
+      <div class="grid">
+        <label>Replay the blast every
+          <span><input id="nag" type="number" min="1" max="120" /> min</span>
+          <small class="muted">while you stay on the site past its limit</small>
+        </label>
+        <label>"5 min aur" buys you
+          <span><input id="snooze" type="number" min="1" max="120" /> min</span>
+          <small class="muted">only unlocked after the video finishes</small>
+        </label>
+      </div>
+      <label class="check"><input id="pauseMedia" type="checkbox" /> Pause the page's own videos and audio during the blast</label>
+      <label class="check"><input id="enabled" type="checkbox" /> Armed (uncheck to only track time, no blasting)</label>
+    </section>
+
+    <section class="card">
+      <h2>4 · The damage, last 7 days</h2>
+      <div id="history" class="history"></div>
+    </section>
+
+    <section class="card danger-zone">
+      <h2>Reset</h2>
+      <div class="row">
+        <button id="resetToday" class="ghost small">Reset today's time</button>
+        <button id="resetAll" class="ghost small">Delete all history</button>
+      </div>
+    </section>
+
+    <footer class="muted">Your data never leaves this browser.</footer>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

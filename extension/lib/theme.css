@@ -1,0 +1,112 @@
+/* Shared look: hazard-tape yellow, ink black, siren red. Chunky borders and
+   hard shadows, like a sticker slapped on your screen. */
+
+:root {
+  --bg: #fffbea;
+  --surface: #ffffff;
+  --ink: #141414;
+  --muted: #5c5a52;
+  --line: #141414;
+  --yellow: #ffd60a;
+  --red: #ff2d55;
+  --green: #17b26a;
+  --track: #f1ead0;
+  --shadow: 4px 4px 0 var(--line);
+  --radius: 12px;
+  --font: "Inter", system-ui, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-hi: "Noto Sans Devanagari", "Mangal", "Nirmala UI", var(--font);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15140f;
+    --surface: #1f1d16;
+    --ink: #f6f1de;
+    --muted: #b3ad98;
+    --line: #000000;
+    --track: #2d2a20;
+    --shadow: 4px 4px 0 #000;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.tape {
+  height: 10px;
+  background: repeating-linear-gradient(-45deg, var(--yellow) 0 14px, #141414 14px 28px);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+.brand .hi { font-family: var(--font-hi); font-weight: 700; color: var(--muted); font-size: 0.8em; }
+
+.card {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+button, .btn {
+  font: inherit;
+  font-weight: 800;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--yellow);
+  color: #141414;
+  padding: 8px 14px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--line);
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+button:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--line); }
+button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.ghost { background: var(--surface); color: var(--ink); }
+button.danger { background: var(--red); color: #fff; }
+button.small { padding: 4px 10px; font-size: 12px; box-shadow: 2px 2px 0 var(--line); }
+
+input[type="text"], input[type="number"] {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  min-width: 0;
+}
+input:focus-visible, button:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+
+.bar {
+  height: 10px;
+  border: 2px solid var(--line);
+  border-radius: 99px;
+  background: var(--track);
+  overflow: hidden;
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  border-right: 2px solid var(--line);
+}
+.bar.warn > span { background: var(--yellow); }
+.bar.over > span { background: var(--red); border-right: 0; }
+
+.muted { color: var(--muted); }

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Bas Kar Bhai</title>
+  <link rel="stylesheet" href="../lib/theme.css" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="tape"></div>
+  <header>
+    <div class="brand"><span>Bas Kar Bhai</span><span class="hi" lang="hi">बस कर भाई</span></div>
+    <label class="switch" title="Turn the blasting on or off">
+      <input type="checkbox" id="enabled" />
+      <span>Armed</span>
+    </label>
+  </header>
+
+  <section class="total">
+    <div class="muted">Tracked today</div>
+    <div class="big" id="total">0m</div>
+  </section>
+
+  <section>
+    <h2>Limits</h2>
+    <ul id="limits" class="rows"></ul>
+    <p id="noLimits" class="muted empty" hidden>No limits yet. Add some in settings.</p>
+  </section>
+
+  <section>
+    <h2>Everything else today</h2>
+    <ul id="others" class="rows compact"></ul>
+    <p id="noOthers" class="muted empty" hidden>Nothing yet. Suspiciously productive.</p>
+  </section>
+
+  <footer>
+    <button id="openOptions" class="ghost small">Settings &amp; limits</button>
+  </footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

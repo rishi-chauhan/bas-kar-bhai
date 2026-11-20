@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Bas Kar Bhai",
+  "short_name": "Bas Kar Bhai",
+  "version": "0.1.0",
+  "description": "Enough bro. Tracks time on distracting sites and blasts an embarrassing video at full volume when you hit your limit.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "unlimitedStorage", "tabs", "alarms", "idle", "scripting", "offscreen"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Bas Kar Bhai",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["overlay/*", "media/*", "lib/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

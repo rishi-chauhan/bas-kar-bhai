@@ -1,0 +1,32 @@
+body { width: 340px; }
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px 4px;
+}
+header .brand { font-size: 18px; }
+
+.switch { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 12px; cursor: pointer; }
+.switch input { accent-color: var(--red); width: 16px; height: 16px; margin: 0; }
+
+section { padding: 8px 14px; }
+.total .big { font-size: 34px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; }
+
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin: 4px 0 8px; color: var(--muted); }
+
+.rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.rows li .top { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; margin-bottom: 4px; }
+.rows li .top .site { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows li .top .time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rows li.over .time { color: var(--red); }
+
+.rows.compact { gap: 4px; }
+.rows.compact li { display: flex; justify-content: space-between; gap: 8px; }
+.rows.compact li .site { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows.compact li .time { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+.empty { margin: 0; }
+
+footer { padding: 6px 14px 14px; }
