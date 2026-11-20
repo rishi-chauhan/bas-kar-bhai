@@ -10,7 +10,7 @@ import {
 } from '../lib/common.js';
 import { saveCustomVideo, loadCustomVideo, deleteCustomVideo, resolveVideoUrl } from '../lib/media-db.js';
 import { parseYouTubeUrl, parseTime, fetchVideoInfo, createPlayer } from '../lib/youtube.js';
-import { BOOST_LEVELS, listOutputDevices } from '../lib/loudness.js';
+import { BOOST_LEVELS, pickSpeaker, currentOutputs, requestOutputs, micPermission } from '../lib/loudness.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
@@ -208,54 +208,102 @@ $('boost').replaceChildren(
 );
 $('boost').addEventListener('change', (e) => update({ boostDb: Number(e.target.value) }));
 
-function renderOutputs(devices = []) {
-  const saved = settings.outputDevice;
-  const list = [...devices];
-  if (saved?.id && !list.some((d) => d.id === saved.id)) list.push({ ...saved, label: `${saved.label} (not connected)` });
-  const base = document.createElement('option');
-  base.value = '';
-  base.textContent = 'Whatever is playing now (default)';
-  $('output').replaceChildren(
-    base,
-    ...list.map((d) => {
-      const o = document.createElement('option');
-      o.value = d.id;
-      o.textContent = d.label;
-      return o;
-    })
-  );
-  $('output').value = saved?.id || '';
-  $('output').dataset.devices = JSON.stringify(devices);
-}
+// Connected outputs, or null while Chrome hides them (no mic permission).
+let outputs = null;
+let micState = 'prompt';
 
 async function renderLoudness() {
   $('boost').value = String(settings.boostDb);
+  micState = await micPermission();
+  outputs = micState === 'granted' ? await currentOutputs() : null;
   renderOutputs();
-  // Already allowed the mic once? Then list speakers without asking again.
-  const perm = await navigator.permissions.query({ name: 'microphone' }).catch(() => null);
-  if (perm?.state === 'granted') renderOutputs(await listOutputDevices().catch(() => []));
 }
 
-$('pickOutput').addEventListener('click', async () => {
-  const err = $('outputError');
+function renderOutputs() {
+  const mode = settings.outputMode;
+  const saved = settings.outputDevice;
+  const speaker = outputs ? pickSpeaker(outputs) : null;
+
+  const choices = [
+    ['auto', 'Built-in speakers (automatic)'],
+    ['default', "Whatever I'm listening on"],
+    ...(outputs || []).map((d) => [`manual:${d.id}`, d.label]),
+  ];
+  const savedConnected = saved?.id && outputs?.some((d) => d.id === saved.id);
+  if (mode === 'manual' && saved?.id && !savedConnected) choices.push([`manual:${saved.id}`, `${saved.label} (not connected)`]);
+  $('output').replaceChildren(
+    ...choices.map(([value, label]) => {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = label;
+      return o;
+    })
+  );
+  $('output').value = mode === 'manual' && saved?.id ? `manual:${saved.id}` : mode;
+
+  // Say plainly where the blast will go.
+  let status = '';
+  let warn = false;
+  if (mode === 'default') {
+    status = "Plays on whatever you're listening on, headphones included.";
+  } else if (!outputs) {
+    warn = true;
+    status =
+      micState === 'denied'
+        ? "Microphone access is blocked for this extension, so Chrome won't show your speakers. Allow it in the browser's site settings for this extension. Until then the blast plays on whatever you're listening on."
+        : "Speakers not found yet. Use “Find my speakers” above. Until then the blast plays on whatever you're listening on.";
+  } else if (mode === 'manual' && savedConnected) {
+    status = `✓ Blasting on ${saved.label}`;
+  } else if (speaker) {
+    status = mode === 'manual'
+      ? `${saved?.label || 'That device'} isn't connected, so it'll use your speakers: ${speaker.label}`
+      : `✓ Blasting on ${speaker.label}`;
+  } else {
+    warn = true;
+    status = `Couldn't tell which of these is your speakers: ${outputs.map((d) => d.label).join(', ') || 'none found'}. Pick one above, otherwise it plays on whatever you're listening on.`;
+  }
+  $('outputStatus').textContent = status;
+  $('outputStatus').classList.toggle('warn', warn);
+
+  // The one-time setup card at the top.
+  $('setup').hidden = mode === 'default' || !!outputs;
+}
+
+$('findSpeakers').addEventListener('click', async () => {
+  const err = $('setupError');
   err.hidden = true;
   try {
-    const devices = await listOutputDevices();
-    renderOutputs(devices);
-    toast(devices.length ? `Found ${devices.length} output${devices.length === 1 ? '' : 's'}. Pick your speakers.` : 'No outputs found');
+    outputs = await requestOutputs();
+    micState = 'granted';
+    renderOutputs();
+    const speaker = pickSpeaker(outputs);
+    toast(speaker ? `Found them: ${speaker.label}` : 'Pick your speakers in section 3');
   } catch {
-    err.textContent = 'Microphone access was blocked, so Chrome won\'t list your speakers. Allow it from the icon in the address bar and try again.';
+    micState = await micPermission();
+    err.textContent =
+      "Chrome didn't allow it, so we can't see your speakers. If you clicked Block, allow the microphone in the browser's site settings for this extension and try again.";
     err.hidden = false;
   }
 });
 
 $('output').addEventListener('change', async (e) => {
-  const id = e.target.value;
-  const devices = JSON.parse(e.target.dataset.devices || '[]');
-  const device = devices.find((d) => d.id === id) || (settings.outputDevice?.id === id ? settings.outputDevice : null);
-  await update({ outputDevice: id && device ? { id, label: device.label.replace(/ \(not connected\)$/, '') } : null });
-  toast(id ? `Blasting on ${device.label} from now on` : 'Back to the default output');
+  const value = e.target.value;
+  if (value.startsWith('manual:')) {
+    const id = value.slice('manual:'.length);
+    const device = outputs?.find((d) => d.id === id) || settings.outputDevice;
+    await update({ outputMode: 'manual', outputDevice: { id, label: device.label } });
+  } else {
+    await update({ outputMode: value });
+  }
+  renderOutputs();
 });
+
+// Plugging in headphones or allowing the mic elsewhere: refresh.
+navigator.mediaDevices?.addEventListener('devicechange', renderLoudness);
+navigator.permissions
+  ?.query({ name: 'microphone' })
+  .then((p) => (p.onchange = renderLoudness))
+  .catch(() => {});
 
 // ---------------------------------------------------------------------------
 // Behaviour

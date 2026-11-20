@@ -234,15 +234,19 @@ async function ensureOffscreen() {
     .createDocument({
       url: 'offscreen/offscreen.html',
       reasons: ['AUDIO_PLAYBACK'],
-      justification: 'Play the "limit reached" sound when the page blocks autoplay, or on the chosen speakers.',
+      justification: 'Play the "limit reached" sound on the built-in speakers, or when the page blocks autoplay.',
     })
     .finally(() => (creatingOffscreen = null));
   await creatingOffscreen;
 }
 
-async function playOffscreen({ video, youtube, boostDb, outputDevice }) {
+async function playOffscreen({ video, youtube, boostDb, outputMode, outputDevice }) {
   await ensureOffscreen();
-  await chrome.runtime.sendMessage({ target: 'offscreen', type: 'PLAY', video, youtube, boostDb, outputDevice });
+  const res = await chrome.runtime.sendMessage({
+    target: 'offscreen', type: 'PLAY', video, youtube, boostDb, outputMode, outputDevice,
+  });
+  if (res && !res.ok) throw new Error(res.error);
+  return { device: res?.device ?? null };
 }
 
 async function endBlast(tabId) {
@@ -265,7 +269,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || msg.target === 'offscreen') return;
 
   const reply = (p) => {
-    p.then(() => sendResponse({ ok: true }), (err) => sendResponse({ ok: false, error: String(err) }));
+    p.then(
+      (result) => sendResponse({ ok: true, ...(result && typeof result === 'object' ? result : {}) }),
+      (err) => sendResponse({ ok: false, error: String(err) })
+    );
     return true; // keep the channel open for the async reply
   };
 

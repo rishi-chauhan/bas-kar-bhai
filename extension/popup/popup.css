@@ -30,3 +30,15 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin:
 .empty { margin: 0; }
 
 footer { padding: 6px 14px 14px; }
+
+.notice {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 6px 14px 0;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--red);
+  color: #fff;
+  padding: 8px 10px;
+}

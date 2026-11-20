@@ -7,6 +7,7 @@ import {
   siteMatches,
   formatDuration,
 } from '../lib/common.js';
+import { micPermission } from '../lib/loudness.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,6 +18,7 @@ async function render() {
   const today = usage[todayKey()] || {};
 
   $('enabled').checked = settings.enabled;
+  $('speakerNotice').hidden = settings.outputMode === 'default' || (await micPermission()) === 'granted';
   $('total').textContent = formatDuration(Object.values(today).reduce((a, b) => a + b, 0));
 
   // Limits, worst offenders first.
@@ -64,5 +66,6 @@ function el(tag, className = '', text = '') {
 
 $('enabled').addEventListener('change', (e) => saveSettings({ enabled: e.target.checked }));
 $('openOptions').addEventListener('click', () => chrome.runtime.openOptionsPage());
+$('speakerNotice').addEventListener('click', () => chrome.runtime.openOptionsPage());
 
 render();

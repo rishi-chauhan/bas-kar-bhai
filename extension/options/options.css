@@ -133,3 +133,10 @@ select {
 .field > select { justify-self: start; }
 .speakers { margin-top: 18px; padding-top: 14px; border-top: 2px dashed var(--line); }
 .speakers .row select { flex: 1 1 220px; min-width: 0; }
+
+.setup { background: var(--yellow); color: #141414; }
+.setup p { margin: 0 0 12px; }
+.setup .muted { color: #4a4636; }
+.setup button { background: #141414; color: var(--yellow); }
+.output-status { margin: 4px 0 8px; font-weight: 700; }
+.output-status.warn { color: var(--red); }

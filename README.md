@@ -24,7 +24,7 @@ Right now it's a Chrome extension (works in Chrome, Brave, Edge and other Chromi
 2. Open `chrome://extensions` (or `brave://extensions`, `edge://extensions`).
 3. Turn on **Developer mode**.
 4. Click **Load unpacked** and pick the `extension/` folder.
-5. The settings page opens. Set your limits, turn the volume up, and hit **Test the blast**.
+5. The settings page opens. Click **Find my speakers** (one-time microphone permission, see below), set your limits, turn the volume up, and hit **Test the blast**.
 
 ## How loud is "full volume"?
 
@@ -32,7 +32,7 @@ No browser extension can change your **system** volume (there's no API for it, a
 
 - **Louder than 100%.** The bundled siren and uploaded files go through a Web Audio boost (+12 dB by default, up to +18 dB) and a limiter. Quiet phone-recorded clips come out far louder at the same system volume, without crackling.
 - **Muted tab? Not anymore.** If you muted the site in the browser, it gets unmuted before the blast, and again if you try to mute it during the blast.
-- **Skip the headphones (opt-in).** Pick your laptop speakers in settings and the blast plays there even while Bluetooth headphones are connected. Chrome only lists output devices after you allow microphone access; the mic is released immediately and nothing is recorded. Wired headphones usually share a device with the speakers, so they can't be bypassed.
+- **Always on the speakers.** The blast plays on your built-in speakers, even while Bluetooth headphones are connected. Chrome only shows an extension your output devices after you allow microphone access, so the settings page asks once ("Find my speakers"). The mic is released immediately and nothing is recorded. The speakers are picked by name (e.g. "MacBook Pro Speakers", "Speakers (Realtek…)", "… Analog Stereo"), skipping headphones, HDMI monitors and virtual devices. If the guess is wrong you can pick the device yourself; if the mic is blocked or no speakers are found, it plays on the current output. Wired headphones usually share a device with the speakers, so they can't be skipped.
 - **Sound always plays.** If the site blocks autoplay with sound, the picture plays muted in the overlay and the sound comes from a hidden extension page instead, which isn't subject to that rule.
 
 YouTube videos play at volume 100 but can't be boosted or sent to a specific device, because their audio lives inside YouTube's own player. For maximum damage, upload your clip as a file. If YouTube can't play at all (offline, video deleted, embedding disabled), the bundled siren plays instead.

@@ -21,7 +21,10 @@ export const DEFAULT_SETTINGS = {
   pausePageMedia: true,
   // Extra loudness for the bundled/uploaded video (see lib/loudness.js).
   boostDb: 12,
-  // { id, label } of an output device to always blast on, or null for default.
+  // Where the blast plays: 'auto' = built-in speakers (found automatically),
+  // 'manual' = `outputDevice`, 'default' = whatever the system is using.
+  outputMode: 'auto',
+  // { id, label } chosen by hand when outputMode is 'manual'.
   outputDevice: null,
 };
 

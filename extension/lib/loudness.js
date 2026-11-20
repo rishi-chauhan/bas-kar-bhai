@@ -56,28 +56,82 @@ export async function attachBoost(media, { boostDb = 0, sinkId = '' } = {}) {
   return ctx;
 }
 
-// Finds the saved output device among the ones currently connected. Device
-// ids can change, so fall back to matching the label. Returns '' (default
-// output) if it's not connected right now.
-export async function findSinkId(saved) {
-  if (!saved?.id) return '';
+// ---------------------------------------------------------------------------
+// Output devices
+//
+// Chrome hides output devices (empty ids and labels) until the extension has
+// microphone permission, and gives no "this is the built-in speaker" flag,
+// only a name. So: ask for the mic once, then pick the speakers by name.
+
+// Names that look like built-in / wired speakers.
+const SPEAKER_HINTS = /speaker|built-?in|internal|analog|realtek|hd audio|high definition|laptop|notebook/i;
+// Names that look like headphones, Bluetooth gear, monitors/TVs or virtual devices.
+const NOT_SPEAKER_HINTS =
+  /head(phone|set)|earphone|ear ?buds?|\bbuds\b|airpods|hands-?free|bluetooth|\bbt\b|hdmi|displayport|\bdp\b|monitor|\btv\b|\b(wh|wf)-|xm\d|bose|jbl|beats|sennheiser|jabra|usb|virtual|loopback|cable|dummy|null|steam|discord|zoom|teams/i;
+
+function speakerScore(label) {
+  return (SPEAKER_HINTS.test(label) ? 2 : 0) - (NOT_SPEAKER_HINTS.test(label) ? 3 : 0);
+}
+
+// Best guess at the built-in speakers among `outputs` ({id, label}), or null
+// if nothing looks like a speaker (e.g. a desktop with only headphones).
+export function pickSpeaker(outputs) {
+  let best = null;
+  let bestScore = 0;
+  for (const d of outputs) {
+    const score = speakerScore(d.label || '');
+    if (score > bestScore) {
+      best = d;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+// Output devices currently connected, without prompting. Returns null if the
+// mic permission hasn't been granted (Chrome hides the devices until then).
+export async function currentOutputs() {
   try {
-    const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput');
-    const match = outputs.find((d) => d.deviceId === saved.id) || outputs.find((d) => d.label && d.label === saved.label);
-    return match && match.deviceId !== 'default' ? match.deviceId : '';
+    const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput');
+    if (!all.some((d) => d.label)) return null;
+    return all
+      .filter((d) => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications')
+      .map((d) => ({ id: d.deviceId, label: d.label || 'Unnamed output' }));
   } catch {
-    return '';
+    return null;
   }
 }
 
-// Lists output devices. Chrome only reveals them after the microphone
-// permission is granted, so this asks for it (and immediately lets go of the
-// mic, nothing is recorded).
-export async function listOutputDevices() {
+// Asks for the mic permission (released immediately, nothing is recorded) and
+// returns the connected outputs.
+export async function requestOutputs() {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   stream.getTracks().forEach((t) => t.stop());
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  return devices
-    .filter((d) => d.kind === 'audiooutput' && d.deviceId !== 'default' && d.deviceId !== 'communications')
-    .map((d) => ({ id: d.deviceId, label: d.label || 'Unnamed output' }));
+  return (await currentOutputs()) || [];
+}
+
+// Which device the blast should play on, given the settings:
+//   mode 'auto'    -> the built-in speakers
+//   mode 'manual'  -> `device`, or the speakers if it's not connected
+//   mode 'default' -> whatever the system is using
+// Returns {id, label} or null for the default output.
+export async function chooseOutput(mode, device) {
+  if (mode === 'default') return null;
+  const outputs = await currentOutputs();
+  if (!outputs) return null;
+  if (mode === 'manual' && device?.id) {
+    // Ids can change between sessions; the name is a decent fallback.
+    const match = outputs.find((d) => d.id === device.id) || outputs.find((d) => d.label === device.label);
+    if (match) return match;
+  }
+  return pickSpeaker(outputs);
+}
+
+// The mic permission state for this extension: 'granted', 'denied' or 'prompt'.
+export async function micPermission() {
+  try {
+    return (await navigator.permissions.query({ name: 'microphone' })).state;
+  } catch {
+    return 'prompt';
+  }
 }

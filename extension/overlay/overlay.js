@@ -50,21 +50,29 @@ function unlockSnooze() {
   $('fine').textContent = 'Fine. But we will be back.';
 }
 
-// Sound couldn't start in the page, so the extension's hidden offscreen page
-// plays it instead.
-function soundFromBackground(choice) {
-  if (audioInBackground) return;
+// The extension's hidden offscreen page plays the sound instead of this
+// frame: to reach the built-in speakers, or because the site blocked sound.
+// Resolves to the offscreen page's answer ({ ok, device }).
+async function soundFromBackground(choice) {
+  if (audioInBackground) return { ok: true };
   audioInBackground = true;
-  $('soundHint').hidden = false;
-  chrome.runtime
+  const res = await chrome.runtime
     .sendMessage({
       type: 'BKB_PLAY_AUDIO',
       video: choice,
       youtube: settings.youtube,
       boostDb: settings.boostDb,
-      outputDevice: choice === 'youtube' ? null : settings.outputDevice,
+      outputMode: choice === 'youtube' ? 'default' : settings.outputMode,
+      outputDevice: settings.outputDevice,
     })
-    .catch(() => {});
+    .catch((err) => ({ ok: false, error: String(err) }));
+  if (res?.ok) {
+    $('soundHint').textContent = res.device ? `🔊 blasting on ${res.device}` : '🔊 sound playing in the background';
+    $('soundHint').hidden = false;
+  } else {
+    audioInBackground = false;
+  }
+  return res || { ok: false };
 }
 
 // --- A video file (bundled or uploaded) -----------------------------------
@@ -75,15 +83,15 @@ async function playFile(choice) {
   video.src = await resolveVideoUrl(choice);
   video.volume = 1;
 
-  // A chosen output device (e.g. the laptop speakers) is only reachable from
-  // the extension's own top-level page, so the sound goes there and the
-  // picture plays silently here.
-  if (settings.outputDevice?.id) {
-    $('soundHint').textContent = `🔊 blasting on ${settings.outputDevice.label}`;
+  // Speakers wanted: output devices are only reachable from the extension's
+  // top-level page, so the sound goes there and the picture plays silently here.
+  if (settings.outputMode !== 'default') {
     video.muted = true;
     video.play().catch(() => {});
-    soundFromBackground(choice);
-    return;
+    if ((await soundFromBackground(choice)).ok) return;
+    // That failed somehow: fall back to playing the sound right here.
+    video.pause();
+    video.currentTime = 0;
   }
 
   video.muted = false;

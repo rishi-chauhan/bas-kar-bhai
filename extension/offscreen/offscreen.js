@@ -1,10 +1,10 @@
-// Invisible page that plays the blast's sound when the overlay can't: the
-// website's autoplay policy blocked it, or the sound must go to a specific
-// output device (only reachable from a top-level extension page).
+// Invisible page that plays the blast's sound: on the built-in speakers
+// (output devices are only reachable from a top-level extension page), or
+// whenever the website's autoplay policy blocks sound in the overlay.
 // Offscreen pages only get chrome.runtime, so settings arrive in the message.
 import { resolveVideoUrl } from '../lib/media-db.js';
 import { createPlayer } from '../lib/youtube.js';
-import { attachBoost, findSinkId } from '../lib/loudness.js';
+import { attachBoost, chooseOutput } from '../lib/loudness.js';
 
 let audio = null;
 let audioCtx = null;
@@ -23,7 +23,8 @@ function stop() {
   currentUrl = null;
 }
 
-async function play({ video: choice, youtube, boostDb = 0, outputDevice = null }) {
+// Resolves to { device }: the name of the output it's playing on, or null for the default.
+async function play({ video: choice, youtube, boostDb = 0, outputMode = 'default', outputDevice = null }) {
   stop();
 
   // YouTube's audio lives in a cross-origin frame: it can't be boosted or
@@ -36,7 +37,7 @@ async function play({ video: choice, youtube, boostDb = 0, outputDevice = null }
       },
       onState: (state) => state === 1 && ytPlayer?.loud(),
     });
-    return;
+    return { device: null };
   }
   if (choice === 'youtube') choice = 'default';
 
@@ -47,11 +48,13 @@ async function play({ video: choice, youtube, boostDb = 0, outputDevice = null }
   audio.src = currentUrl;
   audio.volume = 1;
 
-  const sinkId = await findSinkId(outputDevice);
+  const output = await chooseOutput(outputMode, outputDevice);
+  const sinkId = output?.id || '';
   audioCtx = await attachBoost(audio, { boostDb, sinkId });
   // No Web Audio (boost off)? The element can still pick the device itself.
   if (!audioCtx && sinkId) await audio.setSinkId(sinkId).catch(() => {});
   await audio.play();
+  return { device: output?.label || null };
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -59,7 +62,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === 'PLAY') {
     play(msg).then(
-      () => sendResponse({ ok: true }),
+      (result) => sendResponse({ ok: true, ...result }),
       (err) => sendResponse({ ok: false, error: String(err) })
     );
     return true;

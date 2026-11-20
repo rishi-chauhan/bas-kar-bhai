@@ -15,6 +15,18 @@
       <p class="muted">Set a limit. Blow past it. Get blasted at full volume. Close the tab out of shame.</p>
     </header>
 
+    <section class="card setup" id="setup" hidden>
+      <h2>🔊 One last step: let us find your speakers</h2>
+      <p>The blast plays on your built-in speakers, even if you're wearing Bluetooth headphones. Chrome only shows
+        an extension your speakers after you allow <strong>microphone</strong> access. The mic is switched off the
+        instant it's allowed. Nothing is ever recorded or sent anywhere.</p>
+      <div class="row">
+        <button id="findSpeakers" type="button">Find my speakers</button>
+        <span class="muted">Skip this and the blast plays on whatever you're listening on.</span>
+      </div>
+      <p id="setupError" class="error" hidden></p>
+    </section>
+
     <section class="card">
       <h2>1 · Your weaknesses</h2>
       <p class="muted">Daily limits. A limit on <code>youtube.com</code> also covers <code>m.youtube.com</code>, <code>music.youtube.com</code> and friends.</p>
@@ -77,17 +89,13 @@
         upload your clip as a file.</small>
 
       <div class="speakers">
-        <div class="field">Always blast on
-          <div class="row">
-            <select id="output" aria-label="Output device"><option value="">Whatever is playing now (default)</option></select>
-            <button id="pickOutput" class="ghost small" type="button">Find my speakers…</button>
-          </div>
-        </div>
-        <small class="muted">Pick your laptop speakers and the blast skips your Bluetooth headphones, so everyone hears it.
-          Chrome only lists speakers after you allow microphone access. The mic is switched off immediately and
-          nothing is ever recorded. Wired headphones usually count as the same device as the speakers, so they
-          can't be bypassed. Not available for YouTube videos.</small>
-        <p id="outputError" class="error" hidden></p>
+        <label class="field">Blast on
+          <select id="output" aria-label="Output device"></select>
+        </label>
+        <p id="outputStatus" class="output-status"></p>
+        <small class="muted">Plays on your built-in speakers even when Bluetooth headphones are connected, so
+          everyone hears it. Wired headphones usually count as the same device as the speakers, so they can't be
+          skipped. YouTube videos always play on the current output.</small>
       </div>
     </section>
 
