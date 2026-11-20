@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "description": "Enough bro. Tracks time on distracting sites and blasts an embarrassing video at full volume when you hit your limit.",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "unlimitedStorage", "tabs", "alarms", "idle", "scripting", "offscreen"],
+  "permissions": ["storage", "unlimitedStorage", "tabs", "alarms", "idle", "scripting", "offscreen", "declarativeNetRequestWithHostAccess"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",

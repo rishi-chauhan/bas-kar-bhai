@@ -12,8 +12,11 @@ export const DEFAULT_SETTINGS = {
   nagEveryMinutes: 2,
   // "5 more minutes, please" buys you this much peace.
   snoozeMinutes: 5,
-  // 'default' = bundled siren video, 'custom' = the one you uploaded.
+  // 'default' = bundled siren video, 'custom' = the one you uploaded,
+  // 'youtube' = a YouTube link (see `youtube`).
   video: 'default',
+  // { id, start, end, title, url } when a YouTube link is set.
+  youtube: null,
   // Pause whatever the page itself is playing so the blast is the only sound.
   pausePageMedia: true,
 };

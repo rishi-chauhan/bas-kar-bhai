@@ -69,7 +69,8 @@ h1 .hi { font-family: var(--font-hi); font-size: clamp(22px, 4vw, 34px); font-we
   overflow: hidden;
   aspect-ratio: 16 / 9;
 }
-.screen video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.screen video, .screen iframe { width: 100%; height: 100%; object-fit: contain; display: block; border: 0; }
+.screen [hidden] { display: none; }
 .sound-hint {
   position: absolute;
   left: 8px;

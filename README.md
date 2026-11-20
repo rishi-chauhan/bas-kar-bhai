@@ -12,7 +12,8 @@ Right now it's a Chrome extension (works in Chrome, Brave, Edge and other Chromi
 - **Daily limits per site.** A limit on `youtube.com` also covers `m.youtube.com`, `music.youtube.com`, etc.
 - **The blast:** a full-screen overlay with a loud siren/air-horn video. It pauses the page's own media, mounts inside fullscreen players, and keeps coming back every few minutes while you stay.
 - **Begging is allowed, after the shame:** "5 min aur" only unlocks once the video has finished.
-- **Bring your own video:** upload any video or audio clip (up to 60 MB).
+- **Use any YouTube video:** paste a link (youtu.be, watch, shorts, with or without `?t=`), optionally pick start/stop times. It plays at volume 100 inside the overlay.
+- **Or bring your own file:** upload any video or audio clip (up to 60 MB).
 - **Badge** on the toolbar icon shows minutes left on the current site (`!!` once you're over).
 - **Popup** with today's usage, **settings page** with a 7-day history.
 - **Private:** everything stays in your browser. No servers, no accounts, no analytics.
@@ -32,6 +33,8 @@ Browsers aren't allowed to change your **system** volume, so the video plays at 
 - It plays unmuted inside the page when Chrome allows it (you've clicked on the site at some point, which you almost always have).
 - If the site's autoplay policy blocks sound, the picture plays muted and the sound comes from a hidden extension page instead, which isn't subject to that policy.
 
+YouTube videos work the same way: the embedded player is unmuted and set to volume 100, and if the site blocks sound, the hidden page plays the YouTube audio instead. If YouTube can't play at all (offline, video deleted, uploader disabled embedding), the bundled siren plays.
+
 Raising the system volume itself would need a native helper app (desktop) or the phone app. See the roadmap.
 
 ## Project layout
@@ -45,7 +48,7 @@ extension/
   offscreen/           hidden page that plays audio when the site blocks autoplay
   popup/               toolbar popup
   options/             settings page
-  lib/                 shared helpers, IndexedDB storage for custom videos, theme
+  lib/                 shared helpers, YouTube player bridge, IndexedDB for custom videos, theme
   media/default.mp4    bundled blast video
   icons/
 scripts/make_assets.py regenerates the default video and icons from scratch
@@ -56,6 +59,10 @@ scripts/make_assets.py regenerates the default video and icons from scratch
 The worker remembers which site is in front of you and since when (`chrome.storage.session`). On every tab switch, URL change, window focus change, idle change, and on a 30-second alarm, it credits the elapsed time to that site, then checks its limit. Single chunks are capped at 2 minutes, so a laptop that slept on YouTube doesn't come back with 8 hours of "usage".
 
 Data lives in `chrome.storage.local` (settings and per-day usage, kept for 30 days). Custom videos live in the extension's IndexedDB.
+
+### Why YouTube needs `declarativeNetRequest`
+
+YouTube refuses to play embeds that arrive without a `Referer` header ("Error 153"), and pages inside an extension don't send one. The worker installs one rule that sets `Referer: https://<extension-id>.chromiumapp.org/`, only on the extension's own embed requests (they carry a `bkb=1` marker). YouTube embeds on other websites are untouched. The player is controlled through YouTube's iframe `postMessage` protocol, since MV3 extensions can't load the remote IFrame API script.
 
 ### Regenerating assets
 

@@ -20,6 +20,7 @@ import {
   getSettings,
   getUsage,
 } from './lib/common.js';
+import { refererRule, REFERER_RULE_ID } from './lib/youtube.js';
 
 const TICK_ALARM = 'bkb-tick';
 // No keyboard/mouse input for this long = "idle" (unless the tab is playing audio).
@@ -35,6 +36,11 @@ async function ensureSetup() {
   chrome.idle.setDetectionInterval(IDLE_AFTER_SECONDS);
   const alarm = await chrome.alarms.get(TICK_ALARM);
   if (!alarm) await chrome.alarms.create(TICK_ALARM, { periodInMinutes: 0.5 });
+  // Lets YouTube embeds play inside our pages (see lib/youtube.js).
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [REFERER_RULE_ID],
+    addRules: [refererRule()],
+  });
 }
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
@@ -214,9 +220,9 @@ async function ensureOffscreen() {
   await creatingOffscreen;
 }
 
-async function playOffscreen(video) {
+async function playOffscreen(video, youtube) {
   await ensureOffscreen();
-  await chrome.runtime.sendMessage({ target: 'offscreen', type: 'PLAY', video });
+  await chrome.runtime.sendMessage({ target: 'offscreen', type: 'PLAY', video, youtube });
 }
 
 async function stopOffscreen() {
@@ -244,7 +250,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'BKB_CLOSE_TAB':
       return reply(sender.tab?.id != null ? chrome.tabs.remove(sender.tab.id) : Promise.resolve());
     case 'BKB_PLAY_AUDIO':
-      return reply(playOffscreen(msg.video));
+      return reply(playOffscreen(msg.video, msg.youtube));
     case 'BKB_STOP_AUDIO':
       return reply(stopOffscreen());
   }

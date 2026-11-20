@@ -9,6 +9,7 @@ import {
   formatDuration,
 } from '../lib/common.js';
 import { saveCustomVideo, loadCustomVideo, deleteCustomVideo, resolveVideoUrl } from '../lib/media-db.js';
+import { parseYouTubeUrl, parseTime, fetchVideoInfo, createPlayer } from '../lib/youtube.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
@@ -20,6 +21,7 @@ const SITE_COLORS = ['#ff2d55', '#ffd60a', '#2f80ed', '#17b26a', '#9b51e0', '#f2
 
 let settings = await getSettings();
 let previewUrl = null;
+let ytPlayer = null;
 
 // ---------------------------------------------------------------------------
 // Limits
@@ -89,9 +91,71 @@ async function renderVideo() {
   $('customName').textContent = custom ? custom.name : 'No custom video yet.';
   $('removeCustom').hidden = !custom;
 
-  if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
-  previewUrl = await resolveVideoUrl(settings.video);
-  $('preview').src = previewUrl;
+  const yt = settings.youtube;
+  $('youtubeRadio').disabled = !yt;
+  if (yt) {
+    if (document.activeElement !== $('ytUrl')) $('ytUrl').value = yt.url;
+    $('ytStart').value = yt.start ? formatClock(yt.start) : '';
+    $('ytEnd').value = yt.end ? formatClock(yt.end) : '';
+    const span = yt.end ? `${formatClock(yt.start)}–${formatClock(yt.end)}` : `from ${formatClock(yt.start)}`;
+    $('ytInfo').textContent = `${yt.title ? `“${yt.title}”` : yt.id} · plays ${span}`;
+  }
+
+  // Preview whatever is selected.
+  ytPlayer?.destroy();
+  ytPlayer = null;
+  const showYt = settings.video === 'youtube' && yt;
+  $('preview').hidden = !!showYt;
+  $('ytPreview').hidden = !showYt;
+  if (showYt) {
+    $('preview').removeAttribute('src');
+    ytPlayer = createPlayer($('ytPreview'), yt, { controls: true, autoplay: false });
+  } else {
+    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    previewUrl = await resolveVideoUrl(settings.video);
+    $('preview').src = previewUrl;
+  }
+}
+
+$('ytForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('ytError');
+  const fail = (text) => {
+    err.textContent = text;
+    err.hidden = false;
+  };
+  err.hidden = true;
+
+  const parsed = parseYouTubeUrl($('ytUrl').value);
+  if (!parsed) return fail("That doesn't look like a YouTube link. Try https://youtu.be/… or a youtube.com/watch?v=… link.");
+  const start = $('ytStart').value.trim() ? parseTime($('ytStart').value) : parsed.start;
+  const end = $('ytEnd').value.trim() ? parseTime($('ytEnd').value) : 0;
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return fail('Times look like 0:12, 1:05 or 75 (seconds).');
+  if (end && end <= start) return fail('"Stop at" has to be after "Start at".');
+
+  let title = '';
+  try {
+    title = (await fetchVideoInfo(parsed.id)).title;
+  } catch (error) {
+    if (String(error.message).includes('embedding disabled')) {
+      return fail("The uploader doesn't allow this video to be embedded, so it can't play here. Pick another one.");
+    }
+    // Offline or YouTube hiccup: save anyway, the title is just cosmetic.
+  }
+
+  const url = `https://youtu.be/${parsed.id}${start ? `?t=${start}` : ''}`;
+  await update({ youtube: { id: parsed.id, start, end, title, url }, video: 'youtube' });
+  $('ytUrl').value = url;
+  await renderVideo();
+  toast(title ? `“${title}” it is` : 'YouTube video saved');
+});
+
+function formatClock(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
 for (const radio of document.querySelectorAll('input[name="video"]')) {
@@ -117,6 +181,7 @@ $('removeCustom').addEventListener('click', async () => {
 
 $('test').addEventListener('click', () => {
   $('preview').pause();
+  ytPlayer?.pause();
   const frame = document.createElement('iframe');
   frame.className = 'test-frame';
   frame.allow = 'autoplay';

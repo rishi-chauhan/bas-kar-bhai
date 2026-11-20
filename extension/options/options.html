@@ -33,8 +33,19 @@
       <h2>2 · The blast</h2>
       <div class="choices">
         <label><input type="radio" name="video" value="default" /> The bundled siren (<em>BAS KAR BHAI!</em>)</label>
-        <label><input type="radio" name="video" value="custom" id="customRadio" /> My own video</label>
+        <label><input type="radio" name="video" value="youtube" id="youtubeRadio" /> A YouTube video</label>
+        <label><input type="radio" name="video" value="custom" id="customRadio" /> My own video file</label>
       </div>
+      <form id="ytForm" class="yt">
+        <input id="ytUrl" type="text" placeholder="Paste a YouTube link, e.g. https://youtu.be/…" aria-label="YouTube link" autocomplete="off" />
+        <div class="yt-times">
+          <label>Start at <input id="ytStart" type="text" placeholder="0:00" aria-label="Start time" /></label>
+          <label>Stop at <input id="ytEnd" type="text" placeholder="end" aria-label="Stop time" /></label>
+          <button type="submit">Use this video</button>
+        </div>
+        <p id="ytInfo" class="muted yt-info">No YouTube video set yet.</p>
+        <p id="ytError" class="error" hidden></p>
+      </form>
       <div class="upload">
         <label class="btn ghost" for="file">Upload a video…</label>
         <input id="file" type="file" accept="video/*,audio/*" hidden />
@@ -42,6 +53,7 @@
         <button id="removeCustom" class="ghost small" hidden>Remove</button>
       </div>
       <video id="preview" controls playsinline></video>
+      <div id="ytPreview" class="yt-preview" hidden></div>
       <div class="row">
         <button id="test" class="danger">Test the blast 🔊</button>
         <span class="muted">Turn your volume up first. That's the point.</span>
@@ -49,6 +61,8 @@
       <p class="note">
         Heads up: browsers aren't allowed to change your <em>system</em> volume. The video plays at 100%
         of whatever your computer is set to, and pauses everything else on the page so nothing drowns it out.
+        YouTube videos need an internet connection, and some uploaders turn off embedding. If yours won't play,
+        the bundled siren plays instead.
       </p>
     </section>
 
