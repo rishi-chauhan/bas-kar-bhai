@@ -197,6 +197,8 @@ async function blast(tabId, info) {
     limit: String(info.limit),
   }).toString();
   try {
+    // A tab you muted in the browser would swallow the blast. Not today.
+    await unmuteForBlast(tabId);
     await chrome.scripting.executeScript({ target: { tabId }, files: ['content/inject.js'] });
     await chrome.tabs.sendMessage(tabId, { type: 'BKB_SHOW', query, pauseMedia: info.pauseMedia });
   } catch (err) {
@@ -204,6 +206,24 @@ async function blast(tabId, info) {
     console.warn('[bas-kar-bhai] could not show overlay on tab', tabId, err);
   }
 }
+
+// Unmute the tab, and keep it unmuted for a while in case you reach for
+// "Mute site" mid-blast.
+const UNMUTE_GUARD_MS = 90 * 1000;
+
+async function unmuteForBlast(tabId) {
+  const { blasting = {} } = await chrome.storage.session.get('blasting');
+  blasting[tabId] = Date.now() + UNMUTE_GUARD_MS;
+  await chrome.storage.session.set({ blasting });
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.mutedInfo?.muted) await chrome.tabs.update(tabId, { muted: false });
+}
+
+chrome.tabs.onUpdated.addListener(async (tabId, info) => {
+  if (!info.mutedInfo?.muted) return;
+  const { blasting = {} } = await chrome.storage.session.get('blasting');
+  if ((blasting[tabId] || 0) > Date.now()) chrome.tabs.update(tabId, { muted: false }).catch(() => {});
+});
 
 // If the page refuses to autoplay sound in the overlay, an offscreen
 // document (an invisible extension page) plays the audio instead.
@@ -214,15 +234,22 @@ async function ensureOffscreen() {
     .createDocument({
       url: 'offscreen/offscreen.html',
       reasons: ['AUDIO_PLAYBACK'],
-      justification: 'Play the "limit reached" sound when the page blocks autoplay.',
+      justification: 'Play the "limit reached" sound when the page blocks autoplay, or on the chosen speakers.',
     })
     .finally(() => (creatingOffscreen = null));
   await creatingOffscreen;
 }
 
-async function playOffscreen(video, youtube) {
+async function playOffscreen({ video, youtube, boostDb, outputDevice }) {
   await ensureOffscreen();
-  await chrome.runtime.sendMessage({ target: 'offscreen', type: 'PLAY', video, youtube });
+  await chrome.runtime.sendMessage({ target: 'offscreen', type: 'PLAY', video, youtube, boostDb, outputDevice });
+}
+
+async function endBlast(tabId) {
+  if (tabId == null) return;
+  const { blasting = {} } = await chrome.storage.session.get('blasting');
+  delete blasting[tabId];
+  await chrome.storage.session.set({ blasting });
 }
 
 async function stopOffscreen() {
@@ -250,8 +277,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'BKB_CLOSE_TAB':
       return reply(sender.tab?.id != null ? chrome.tabs.remove(sender.tab.id) : Promise.resolve());
     case 'BKB_PLAY_AUDIO':
-      return reply(playOffscreen(msg.video, msg.youtube));
+      return reply(playOffscreen(msg));
     case 'BKB_STOP_AUDIO':
       return reply(stopOffscreen());
+    case 'BKB_BLAST_DONE':
+      return reply(endBlast(sender.tab?.id));
   }
 });

@@ -67,7 +67,32 @@
     </section>
 
     <section class="card">
-      <h2>3 · How mean should it be?</h2>
+      <h2>3 · Louder than 100%</h2>
+      <p class="muted">No extension can touch your system volume, so we make the sound itself as loud as it can possibly be.</p>
+      <label class="field">Boost
+        <select id="boost"></select>
+      </label>
+      <small class="muted">Pumps up quiet clips and squashes the peaks so it doesn't crackle. Works on the bundled siren
+        and uploaded files. YouTube videos play at YouTube's own 100% and can't be boosted, so for maximum damage
+        upload your clip as a file.</small>
+
+      <div class="speakers">
+        <div class="field">Always blast on
+          <div class="row">
+            <select id="output" aria-label="Output device"><option value="">Whatever is playing now (default)</option></select>
+            <button id="pickOutput" class="ghost small" type="button">Find my speakers…</button>
+          </div>
+        </div>
+        <small class="muted">Pick your laptop speakers and the blast skips your Bluetooth headphones, so everyone hears it.
+          Chrome only lists speakers after you allow microphone access. The mic is switched off immediately and
+          nothing is ever recorded. Wired headphones usually count as the same device as the speakers, so they
+          can't be bypassed. Not available for YouTube videos.</small>
+        <p id="outputError" class="error" hidden></p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4 · How mean should it be?</h2>
       <div class="grid">
         <label>Replay the blast every
           <span><input id="nag" type="number" min="1" max="120" /> min</span>
@@ -83,7 +108,7 @@
     </section>
 
     <section class="card">
-      <h2>4 · The damage, last 7 days</h2>
+      <h2>5 · The damage, last 7 days</h2>
       <div id="history" class="history"></div>
     </section>
 

@@ -10,6 +10,7 @@ import {
 } from '../lib/common.js';
 import { saveCustomVideo, loadCustomVideo, deleteCustomVideo, resolveVideoUrl } from '../lib/media-db.js';
 import { parseYouTubeUrl, parseTime, fetchVideoInfo, createPlayer } from '../lib/youtube.js';
+import { BOOST_LEVELS, listOutputDevices } from '../lib/loudness.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
@@ -195,6 +196,68 @@ window.addEventListener('message', (e) => {
 });
 
 // ---------------------------------------------------------------------------
+// Loudness
+
+$('boost').replaceChildren(
+  ...BOOST_LEVELS.map(({ db, label }) => {
+    const o = document.createElement('option');
+    o.value = String(db);
+    o.textContent = label;
+    return o;
+  })
+);
+$('boost').addEventListener('change', (e) => update({ boostDb: Number(e.target.value) }));
+
+function renderOutputs(devices = []) {
+  const saved = settings.outputDevice;
+  const list = [...devices];
+  if (saved?.id && !list.some((d) => d.id === saved.id)) list.push({ ...saved, label: `${saved.label} (not connected)` });
+  const base = document.createElement('option');
+  base.value = '';
+  base.textContent = 'Whatever is playing now (default)';
+  $('output').replaceChildren(
+    base,
+    ...list.map((d) => {
+      const o = document.createElement('option');
+      o.value = d.id;
+      o.textContent = d.label;
+      return o;
+    })
+  );
+  $('output').value = saved?.id || '';
+  $('output').dataset.devices = JSON.stringify(devices);
+}
+
+async function renderLoudness() {
+  $('boost').value = String(settings.boostDb);
+  renderOutputs();
+  // Already allowed the mic once? Then list speakers without asking again.
+  const perm = await navigator.permissions.query({ name: 'microphone' }).catch(() => null);
+  if (perm?.state === 'granted') renderOutputs(await listOutputDevices().catch(() => []));
+}
+
+$('pickOutput').addEventListener('click', async () => {
+  const err = $('outputError');
+  err.hidden = true;
+  try {
+    const devices = await listOutputDevices();
+    renderOutputs(devices);
+    toast(devices.length ? `Found ${devices.length} output${devices.length === 1 ? '' : 's'}. Pick your speakers.` : 'No outputs found');
+  } catch {
+    err.textContent = 'Microphone access was blocked, so Chrome won\'t list your speakers. Allow it from the icon in the address bar and try again.';
+    err.hidden = false;
+  }
+});
+
+$('output').addEventListener('change', async (e) => {
+  const id = e.target.value;
+  const devices = JSON.parse(e.target.dataset.devices || '[]');
+  const device = devices.find((d) => d.id === id) || (settings.outputDevice?.id === id ? settings.outputDevice : null);
+  await update({ outputDevice: id && device ? { id, label: device.label.replace(/ \(not connected\)$/, '') } : null });
+  toast(id ? `Blasting on ${device.label} from now on` : 'Back to the default output');
+});
+
+// ---------------------------------------------------------------------------
 // Behaviour
 
 function renderBehaviour() {
@@ -333,4 +396,5 @@ chrome.storage.onChanged.addListener((changes, area) => {
 renderLimits();
 renderBehaviour();
 renderVideo();
+renderLoudness();
 renderHistory();

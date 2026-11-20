@@ -1,6 +1,7 @@
 import { getSettings, formatDuration } from '../lib/common.js';
 import { resolveVideoUrl } from '../lib/media-db.js';
 import { createPlayer } from '../lib/youtube.js';
+import { attachBoost } from '../lib/loudness.js';
 
 const params = new URLSearchParams(location.search);
 const isTest = params.has('test');
@@ -55,7 +56,15 @@ function soundFromBackground(choice) {
   if (audioInBackground) return;
   audioInBackground = true;
   $('soundHint').hidden = false;
-  chrome.runtime.sendMessage({ type: 'BKB_PLAY_AUDIO', video: choice, youtube: settings.youtube }).catch(() => {});
+  chrome.runtime
+    .sendMessage({
+      type: 'BKB_PLAY_AUDIO',
+      video: choice,
+      youtube: settings.youtube,
+      boostDb: settings.boostDb,
+      outputDevice: choice === 'youtube' ? null : settings.outputDevice,
+    })
+    .catch(() => {});
 }
 
 // --- A video file (bundled or uploaded) -----------------------------------
@@ -65,6 +74,18 @@ async function playFile(choice) {
   video.addEventListener('error', () => setTimeout(unlockSnooze, 3000), { once: true });
   video.src = await resolveVideoUrl(choice);
   video.volume = 1;
+
+  // A chosen output device (e.g. the laptop speakers) is only reachable from
+  // the extension's own top-level page, so the sound goes there and the
+  // picture plays silently here.
+  if (settings.outputDevice?.id) {
+    $('soundHint').textContent = `🔊 blasting on ${settings.outputDevice.label}`;
+    video.muted = true;
+    video.play().catch(() => {});
+    soundFromBackground(choice);
+    return;
+  }
+
   video.muted = false;
   try {
     await video.play();
@@ -73,7 +94,10 @@ async function playFile(choice) {
     video.muted = true;
     video.play().catch(() => {});
     soundFromBackground(choice);
+    return;
   }
+  // Playing with sound: now push it past 100%.
+  await attachBoost(video, { boostDb: settings.boostDb });
 }
 
 // --- A YouTube video -------------------------------------------------------
@@ -139,6 +163,7 @@ function stopEverything() {
   video.pause();
   ytPlayer?.destroy();
   ytPlayer = null;
+  chrome.runtime.sendMessage({ type: 'BKB_BLAST_DONE' }).catch(() => {});
   if (audioInBackground) return chrome.runtime.sendMessage({ type: 'BKB_STOP_AUDIO' }).catch(() => {});
 }
 

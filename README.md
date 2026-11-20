@@ -28,14 +28,14 @@ Right now it's a Chrome extension (works in Chrome, Brave, Edge and other Chromi
 
 ## How loud is "full volume"?
 
-Browsers aren't allowed to change your **system** volume, so the video plays at 100% of whatever your computer is set to. To make sure it actually makes a sound:
+No browser extension can change your **system** volume (there's no API for it, and extensions can't fake the volume keys). So Bas Kar Bhai squeezes out every bit of loudness it can within that limit:
 
-- It plays unmuted inside the page when Chrome allows it (you've clicked on the site at some point, which you almost always have).
-- If the site's autoplay policy blocks sound, the picture plays muted and the sound comes from a hidden extension page instead, which isn't subject to that policy.
+- **Louder than 100%.** The bundled siren and uploaded files go through a Web Audio boost (+12 dB by default, up to +18 dB) and a limiter. Quiet phone-recorded clips come out far louder at the same system volume, without crackling.
+- **Muted tab? Not anymore.** If you muted the site in the browser, it gets unmuted before the blast, and again if you try to mute it during the blast.
+- **Skip the headphones (opt-in).** Pick your laptop speakers in settings and the blast plays there even while Bluetooth headphones are connected. Chrome only lists output devices after you allow microphone access; the mic is released immediately and nothing is recorded. Wired headphones usually share a device with the speakers, so they can't be bypassed.
+- **Sound always plays.** If the site blocks autoplay with sound, the picture plays muted in the overlay and the sound comes from a hidden extension page instead, which isn't subject to that rule.
 
-YouTube videos work the same way: the embedded player is unmuted and set to volume 100, and if the site blocks sound, the hidden page plays the YouTube audio instead. If YouTube can't play at all (offline, video deleted, uploader disabled embedding), the bundled siren plays.
-
-Raising the system volume itself would need a native helper app (desktop) or the phone app. See the roadmap.
+YouTube videos play at volume 100 but can't be boosted or sent to a specific device, because their audio lives inside YouTube's own player. For maximum damage, upload your clip as a file. If YouTube can't play at all (offline, video deleted, embedding disabled), the bundled siren plays instead.
 
 ## Project layout
 
@@ -48,7 +48,7 @@ extension/
   offscreen/           hidden page that plays audio when the site blocks autoplay
   popup/               toolbar popup
   options/             settings page
-  lib/                 shared helpers, YouTube player bridge, IndexedDB for custom videos, theme
+  lib/                 shared helpers, loudness boost, YouTube player bridge, IndexedDB for custom videos, theme
   media/default.mp4    bundled blast video
   icons/
 scripts/make_assets.py regenerates the default video and icons from scratch
@@ -77,7 +77,6 @@ Needs Python 3 + Pillow, `ffmpeg` with libx264/aac, and the Noto Sans + Noto San
 ## Roadmap
 
 - [ ] Android app (UsageStats for tracking, overlay + max media volume for the blast)
-- [ ] Optional native helper on desktop to crank the system volume before the blast
 - [ ] Firefox build
 - [ ] Schedules (limits only on weekdays / work hours)
 - [ ] Weekly shame report

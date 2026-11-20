@@ -19,6 +19,10 @@ export const DEFAULT_SETTINGS = {
   youtube: null,
   // Pause whatever the page itself is playing so the blast is the only sound.
   pausePageMedia: true,
+  // Extra loudness for the bundled/uploaded video (see lib/loudness.js).
+  boostDb: 12,
+  // { id, label } of an output device to always blast on, or null for default.
+  outputDevice: null,
 };
 
 // Usage older than this many days is dropped.
