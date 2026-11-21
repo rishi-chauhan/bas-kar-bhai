@@ -11,7 +11,7 @@ Right now it's a Chrome extension (works in Chrome, Brave, Edge and other Chromi
 - **Tracks time per website**, only while the tab is actually in front of you (focused window, not idle). A video playing with sound still counts, even if you haven't touched the keyboard.
 - **Daily limits per site.** A limit on `youtube.com` also covers `m.youtube.com`, `music.youtube.com`, etc.
 - **The blast:** a full-screen overlay with a loud siren/air-horn video. It pauses the page's own media, mounts inside fullscreen players, and keeps coming back every few minutes while you stay.
-- **Begging is allowed, after the shame:** "5 min aur" only unlocks once the video has finished.
+- **Begging is allowed, after the shame:** "5 min aur" only unlocks once the video has played through once. The video itself loops (between your start/stop times, if you set them) until you leave.
 - **Use any YouTube video:** paste a link (youtu.be, watch, shorts, with or without `?t=`), optionally pick start/stop times. It plays at volume 100 inside the overlay.
 - **Or bring your own file:** upload any video or audio clip (up to 60 MB).
 - **Badge** on the toolbar icon shows minutes left on the current site (`!!` once you're over).

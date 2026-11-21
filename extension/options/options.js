@@ -10,6 +10,7 @@ import {
 } from '../lib/common.js';
 import { saveCustomVideo, loadCustomVideo, deleteCustomVideo, resolveVideoUrl } from '../lib/media-db.js';
 import { parseYouTubeUrl, parseTime, fetchVideoInfo, createPlayer } from '../lib/youtube.js';
+import { loopClip } from '../lib/loop.js';
 import { BOOST_LEVELS, pickSpeaker, currentOutputs, requestOutputs, micPermission } from '../lib/loudness.js';
 
 const $ = (id) => document.getElementById(id);
@@ -23,6 +24,7 @@ const SITE_COLORS = ['#ff2d55', '#ffd60a', '#2f80ed', '#17b26a', '#9b51e0', '#f2
 let settings = await getSettings();
 let previewUrl = null;
 let ytPlayer = null;
+let stopPreviewLoop = null;
 
 // ---------------------------------------------------------------------------
 // Limits
@@ -92,19 +94,26 @@ async function renderVideo() {
   $('customName').textContent = custom ? custom.name : 'No custom video yet.';
   $('removeCustom').hidden = !custom;
 
+  const clip = settings.customClip;
+  $('clipForm').hidden = !custom;
+  $('clipStart').value = clip?.start ? formatClock(clip.start) : '';
+  $('clipEnd').value = clip?.end ? formatClock(clip.end) : '';
+  $('clipInfo').textContent = clipText(clip);
+
   const yt = settings.youtube;
   $('youtubeRadio').disabled = !yt;
   if (yt) {
     if (document.activeElement !== $('ytUrl')) $('ytUrl').value = yt.url;
     $('ytStart').value = yt.start ? formatClock(yt.start) : '';
     $('ytEnd').value = yt.end ? formatClock(yt.end) : '';
-    const span = yt.end ? `${formatClock(yt.start)}–${formatClock(yt.end)}` : `from ${formatClock(yt.start)}`;
-    $('ytInfo').textContent = `${yt.title ? `“${yt.title}”` : yt.id} · plays ${span}`;
+    $('ytInfo').textContent = `${yt.title ? `“${yt.title}”` : yt.id} · ${clipText(yt)}`;
   }
 
   // Preview whatever is selected.
   ytPlayer?.destroy();
   ytPlayer = null;
+  stopPreviewLoop?.();
+  stopPreviewLoop = null;
   const showYt = settings.video === 'youtube' && yt;
   $('preview').hidden = !!showYt;
   $('ytPreview').hidden = !showYt;
@@ -114,6 +123,7 @@ async function renderVideo() {
   } else {
     if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
     previewUrl = await resolveVideoUrl(settings.video);
+    stopPreviewLoop = loopClip($('preview'), settings.video === 'custom' ? clip || {} : {});
     $('preview').src = previewUrl;
   }
 }
@@ -151,6 +161,35 @@ $('ytForm').addEventListener('submit', async (e) => {
   toast(title ? `“${title}” it is` : 'YouTube video saved');
 });
 
+function clipText({ start = 0, end = 0 } = {}) {
+  if (end) return `plays ${formatClock(start)}–${formatClock(end)} on repeat`;
+  if (start) return `plays from ${formatClock(start)} to the end, on repeat`;
+  return 'plays the whole video on repeat';
+}
+
+$('clipForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('clipError');
+  const fail = (text) => {
+    err.textContent = text;
+    err.hidden = false;
+  };
+  err.hidden = true;
+
+  const start = $('clipStart').value.trim() ? parseTime($('clipStart').value) : 0;
+  const end = $('clipEnd').value.trim() ? parseTime($('clipEnd').value) : 0;
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return fail('Times look like 0:12, 1:05 or 75 (seconds).');
+  if (end && end <= start) return fail('"Stop at" has to be after "Start at".');
+  const duration = $('preview').duration;
+  if (settings.video === 'custom' && Number.isFinite(duration) && start >= duration) {
+    return fail(`Your video is only ${formatClock(duration)} long.`);
+  }
+
+  await update({ customClip: start || end ? { start, end } : null, video: 'custom' });
+  await renderVideo();
+  toast('Times saved');
+});
+
 function formatClock(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds || 0));
   const h = Math.floor(s / 3600);
@@ -169,14 +208,14 @@ $('file').addEventListener('change', async (e) => {
   if (!file) return;
   if (file.size > MAX_VIDEO_BYTES) return toast('Keep it under 60 MB, bhai');
   await saveCustomVideo(file, file.name);
-  await update({ video: 'custom' });
+  await update({ video: 'custom', customClip: null });
   await renderVideo();
   toast('Custom video saved');
 });
 
 $('removeCustom').addEventListener('click', async () => {
   await deleteCustomVideo();
-  await update({ video: 'default' });
+  await update({ video: 'default', customClip: null });
   await renderVideo();
 });
 

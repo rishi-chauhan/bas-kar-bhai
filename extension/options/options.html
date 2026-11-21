@@ -64,6 +64,15 @@
         <span id="customName" class="muted">No custom video yet.</span>
         <button id="removeCustom" class="ghost small" hidden>Remove</button>
       </div>
+      <form id="clipForm" class="yt clip" hidden>
+        <div class="yt-times">
+          <label>Start at <input id="clipStart" type="text" placeholder="0:00" aria-label="Start time" /></label>
+          <label>Stop at <input id="clipEnd" type="text" placeholder="end" aria-label="Stop time" /></label>
+          <button type="submit">Save times</button>
+        </div>
+        <p id="clipInfo" class="muted yt-info">Plays the whole video on repeat.</p>
+        <p id="clipError" class="error" hidden></p>
+      </form>
       <video id="preview" controls playsinline></video>
       <div id="ytPreview" class="yt-preview" hidden></div>
       <div class="row">
@@ -72,7 +81,7 @@
       </div>
       <p class="note">
         Heads up: browsers aren't allowed to change your <em>system</em> volume. The video plays at 100%
-        of whatever your computer is set to, and pauses everything else on the page so nothing drowns it out.
+        of whatever your computer is set to, on repeat until you leave, and pauses everything else on the page so nothing drowns it out.
         YouTube videos need an internet connection, and some uploaders turn off embedding. If yours won't play,
         the bundled siren plays instead.
       </p>
@@ -108,7 +117,7 @@
         </label>
         <label>"5 min aur" buys you
           <span><input id="snooze" type="number" min="1" max="120" /> min</span>
-          <small class="muted">only unlocked after the video finishes</small>
+          <small class="muted">only unlocked after the video plays through once</small>
         </label>
       </div>
       <label class="check"><input id="pauseMedia" type="checkbox" /> Pause the page's own videos and audio during the blast</label>

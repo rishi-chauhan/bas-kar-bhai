@@ -5,6 +5,7 @@
 import { resolveVideoUrl } from '../lib/media-db.js';
 import { createPlayer } from '../lib/youtube.js';
 import { attachBoost, chooseOutput } from '../lib/loudness.js';
+import { loopClip } from '../lib/loop.js';
 
 let audio = null;
 let audioCtx = null;
@@ -24,13 +25,14 @@ function stop() {
 }
 
 // Resolves to { device }: the name of the output it's playing on, or null for the default.
-async function play({ video: choice, youtube, boostDb = 0, outputMode = 'default', outputDevice = null }) {
+async function play({ video: choice, youtube, clip = null, boostDb = 0, outputMode = 'default', outputDevice = null }) {
   stop();
 
   // YouTube's audio lives in a cross-origin frame: it can't be boosted or
   // re-routed, only played at its own 100%.
   if (choice === 'youtube' && youtube?.id) {
     ytPlayer = createPlayer(document.body, youtube, {
+      loop: true,
       onReady: () => {
         ytPlayer.loud();
         ytPlayer.play();
@@ -44,6 +46,7 @@ async function play({ video: choice, youtube, boostDb = 0, outputMode = 'default
   // A fresh element each time: an element can only be wired into Web Audio once.
   audio = document.createElement('audio');
   document.body.append(audio);
+  loopClip(audio, clip || {});
   currentUrl = await resolveVideoUrl(choice);
   audio.src = currentUrl;
   audio.volume = 1;

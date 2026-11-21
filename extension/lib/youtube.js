@@ -92,7 +92,12 @@ export async function fetchVideoInfo(id) {
 // Embeds a player in `container` and returns a small controller.
 //   onState(state): -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
 //   onError(code): 2 bad id, 5 HTML5 error, 100 not found, 101/150 embedding disabled
-export function createPlayer(container, video, { controls = false, autoplay = true, onReady, onState, onError } = {}) {
+//   loop: replay video.start..video.end forever; onLap() runs on every wrap.
+export function createPlayer(
+  container,
+  video,
+  { controls = false, autoplay = true, loop = false, onReady, onState, onError, onLap } = {}
+) {
   const frame = document.createElement('iframe');
   frame.allow = 'autoplay; encrypted-media';
   frame.referrerPolicy = 'strict-origin-when-cross-origin';
@@ -103,6 +108,10 @@ export function createPlayer(container, video, { controls = false, autoplay = tr
   let connected = false;
   let state = -1;
   let muted = null;
+  let currentTime = 0;
+  let lapping = false;
+  const start = Math.max(0, Number(video.start) || 0);
+  const end = Number(video.end) > start ? Number(video.end) : 0;
   const send = (func, args = []) =>
     frame.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args, id: 1, channel: 'widget' }), '*');
 
@@ -119,15 +128,30 @@ export function createPlayer(container, video, { controls = false, autoplay = tr
       onReady?.();
     }
     if (typeof data.info?.muted === 'boolean') muted = data.info.muted;
+    if (typeof data.info?.currentTime === 'number') {
+      currentTime = data.info.currentTime;
+      if (lapping && (!end || currentTime < end - 0.5)) lapping = false;
+      // The embed's `end` only reliably stops the first play-through, so
+      // watch the clock too.
+      if (loop && end && currentTime >= end && !lapping) lap();
+    }
     const next =
       data.event === 'onStateChange' ? data.info : data.event === 'infoDelivery' ? data.info?.playerState : undefined;
     if (typeof next === 'number' && next !== state) {
       state = next;
       onState?.(state);
+      if (loop && state === 0 && !lapping) lap();
     }
     if (data.event === 'onError') onError?.(data.info);
   };
   window.addEventListener('message', onMessage);
+
+  function lap() {
+    lapping = true;
+    send('seekTo', [start, true]);
+    send('playVideo');
+    onLap?.();
+  }
 
   // The player only talks back after we say we're listening.
   const handshake = setInterval(() => {
@@ -141,8 +165,10 @@ export function createPlayer(container, video, { controls = false, autoplay = tr
     get state() { return state; },
     get muted() { return muted; },
     get connected() { return connected; },
+    get currentTime() { return currentTime; },
     play: () => send('playVideo'),
     pause: () => send('pauseVideo'),
+    seekTo: (seconds) => send('seekTo', [seconds, true]),
     mute: () => send('mute'),
     unMute: () => send('unMute'),
     setVolume: (v) => send('setVolume', [v]),

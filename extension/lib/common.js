@@ -17,6 +17,9 @@ export const DEFAULT_SETTINGS = {
   video: 'default',
   // { id, start, end, title, url } when a YouTube link is set.
   youtube: null,
+  // { start, end } in seconds for the uploaded video (end 0 = the real end).
+  // Every video plays on repeat between these; null = the whole thing.
+  customClip: null,
   // Pause whatever the page itself is playing so the blast is the only sound.
   pausePageMedia: true,
   // Extra loudness for the bundled/uploaded video (see lib/loudness.js).

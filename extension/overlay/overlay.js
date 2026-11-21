@@ -2,6 +2,7 @@ import { getSettings, formatDuration } from '../lib/common.js';
 import { resolveVideoUrl } from '../lib/media-db.js';
 import { createPlayer } from '../lib/youtube.js';
 import { attachBoost } from '../lib/loudness.js';
+import { loopClip } from '../lib/loop.js';
 
 const params = new URLSearchParams(location.search);
 const isTest = params.has('test');
@@ -61,6 +62,7 @@ async function soundFromBackground(choice) {
       type: 'BKB_PLAY_AUDIO',
       video: choice,
       youtube: settings.youtube,
+      clip: clipFor(choice),
       boostDb: settings.boostDb,
       outputMode: choice === 'youtube' ? 'default' : settings.outputMode,
       outputDevice: settings.outputDevice,
@@ -75,10 +77,17 @@ async function soundFromBackground(choice) {
   return res || { ok: false };
 }
 
+// Start/stop times for a file: only the uploaded one has them.
+function clipFor(choice) {
+  return choice === 'custom' ? settings.customClip : null;
+}
+
 // --- A video file (bundled or uploaded) -----------------------------------
 async function playFile(choice) {
   video.hidden = false;
-  video.addEventListener('ended', unlockSnooze, { once: true });
+  const clip = clipFor(choice) || {};
+  // Plays on repeat; one full lap earns you the right to beg.
+  loopClip(video, clip, unlockSnooze);
   video.addEventListener('error', () => setTimeout(unlockSnooze, 3000), { once: true });
   video.src = await resolveVideoUrl(choice);
   video.volume = 1;
@@ -91,7 +100,7 @@ async function playFile(choice) {
     if ((await soundFromBackground(choice)).ok) return;
     // That failed somehow: fall back to playing the sound right here.
     video.pause();
-    video.currentTime = 0;
+    video.currentTime = clip.start || 0;
   }
 
   video.muted = false;
@@ -133,6 +142,8 @@ function playYouTube(yt) {
   };
 
   ytPlayer = createPlayer($('screen'), yt, {
+    loop: true,
+    onLap: unlockSnooze,
     onReady() {
       ytPlayer.loud();
       ytPlayer.play();
@@ -152,7 +163,6 @@ function playYouTube(yt) {
         // Give YouTube a beat to report its muted flag.
         setTimeout(decide, 600);
       }
-      if (state === 0) unlockSnooze();
     },
     onError: giveUp,
   });

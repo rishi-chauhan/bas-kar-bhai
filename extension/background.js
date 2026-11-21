@@ -240,10 +240,10 @@ async function ensureOffscreen() {
   await creatingOffscreen;
 }
 
-async function playOffscreen({ video, youtube, boostDb, outputMode, outputDevice }) {
+async function playOffscreen({ video, youtube, clip, boostDb, outputMode, outputDevice }) {
   await ensureOffscreen();
   const res = await chrome.runtime.sendMessage({
-    target: 'offscreen', type: 'PLAY', video, youtube, boostDb, outputMode, outputDevice,
+    target: 'offscreen', type: 'PLAY', video, youtube, clip, boostDb, outputMode, outputDevice,
   });
   if (res && !res.ok) throw new Error(res.error);
   return { device: res?.device ?? null };
