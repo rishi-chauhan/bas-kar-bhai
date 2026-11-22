@@ -97,10 +97,17 @@ export async function getSettings() {
   return { ...DEFAULT_SETTINGS, ...(settings || {}) };
 }
 
-export async function saveSettings(patch) {
-  const next = { ...(await getSettings()), ...patch };
-  await chrome.storage.local.set({ settings: next });
-  return next;
+// Saves run one at a time: each one reads, merges and writes, so two quick
+// changes (say, two inputs in a row) would otherwise overwrite each other.
+let saving = Promise.resolve();
+export function saveSettings(patch) {
+  const run = saving.then(async () => {
+    const next = { ...(await getSettings()), ...patch };
+    await chrome.storage.local.set({ settings: next });
+    return next;
+  });
+  saving = run.catch(() => {});
+  return run;
 }
 
 export async function getUsage() {
