@@ -4,11 +4,27 @@ import { createPlayer } from '../lib/youtube.js';
 import { attachBoost } from '../lib/loudness.js';
 import { loopClip } from '../lib/loop.js';
 
+// This page has to be web-accessible so it can be framed on the offending
+// site, which means any website could frame it too. So it only runs when the
+// extension itself opened it: a real blast carries a one-time token that the
+// worker issued for this very tab, and a test preview must sit inside one of
+// our own pages.
 const params = new URLSearchParams(location.search);
-const isTest = params.has('test');
-const site = params.get('site') || 'this site';
-const usedSec = Number(params.get('used') || 0);
-const limitMin = Number(params.get('limit') || 0);
+const isTest = params.has('test') && location.ancestorOrigins?.[0] === location.origin;
+const blastInfo = isTest ? {} : await claimBlast(params.get('token'));
+if (!blastInfo) {
+  document.documentElement.hidden = true;
+  throw new Error('[bas-kar-bhai] overlay opened without a valid blast token');
+}
+const site = blastInfo.site || 'this site';
+const usedSec = Number(blastInfo.used || 0);
+const limitMin = Number(blastInfo.limit || 0);
+
+async function claimBlast(token) {
+  if (!token) return null;
+  const res = await chrome.runtime.sendMessage({ type: 'BKB_CLAIM_BLAST', token }).catch(() => null);
+  return res?.ok ? res.blast || null : null;
+}
 
 const $ = (id) => document.getElementById(id);
 const video = $('video');

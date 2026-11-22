@@ -191,12 +191,8 @@ async function snooze(site) {
 // The blast
 
 async function blast(tabId, info) {
-  const query = new URLSearchParams({
-    site: info.site,
-    used: String(info.used),
-    limit: String(info.limit),
-  }).toString();
   try {
+    const query = new URLSearchParams({ token: await issueBlastToken(tabId, info) }).toString();
     // A tab you muted in the browser would swallow the blast. Not today.
     await unmuteForBlast(tabId);
     await chrome.scripting.executeScript({ target: { tabId }, files: ['content/inject.js'] });
@@ -205,6 +201,32 @@ async function blast(tabId, info) {
     // Some pages (Chrome Web Store, PDFs, ...) don't allow scripts.
     console.warn('[bas-kar-bhai] could not show overlay on tab', tabId, err);
   }
+}
+
+// The overlay page is web-accessible (it has to be framed on the offending
+// site), so any website could frame it. It only plays when it can trade a
+// token for the blast details, and a token works once, only for the tab it
+// was issued for, and only for a short while.
+const BLAST_TOKEN_TTL_MS = 60 * 1000;
+
+async function issueBlastToken(tabId, { site, used, limit }) {
+  const now = Date.now();
+  const token = crypto.randomUUID();
+  const { blastTokens = {} } = await chrome.storage.session.get('blastTokens');
+  for (const [t, b] of Object.entries(blastTokens)) if (b.expires < now) delete blastTokens[t];
+  blastTokens[token] = { tabId, site, used, limit, expires: now + BLAST_TOKEN_TTL_MS };
+  await chrome.storage.session.set({ blastTokens });
+  return token;
+}
+
+async function claimBlast(token, tabId) {
+  const { blastTokens = {} } = await chrome.storage.session.get('blastTokens');
+  const b = blastTokens[token];
+  if (!b) return { blast: null };
+  delete blastTokens[token];
+  await chrome.storage.session.set({ blastTokens });
+  if (b.tabId !== tabId || b.expires < Date.now()) return { blast: null };
+  return { blast: { site: b.site, used: b.used, limit: b.limit } };
 }
 
 // Unmute the tab, and keep it unmuted for a while in case you reach for
@@ -277,6 +299,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   };
 
   switch (msg.type) {
+    case 'BKB_CLAIM_BLAST':
+      return reply(claimBlast(String(msg.token || ''), sender.tab?.id));
     case 'BKB_REFRESH':
       return reply(refresh());
     case 'BKB_SNOOZE':
