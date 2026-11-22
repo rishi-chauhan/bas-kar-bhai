@@ -8,14 +8,13 @@ It's a Chrome extension (works in Chrome, Brave, Edge and other Chromium browser
 
 ## Demo
 
-<!--
-  DEMO VIDEO PLACEHOLDER
-  To add the video: edit this file on github.com, delete this comment and the
-  line below it, then drag your .mp4 into the editor at this spot. GitHub
-  uploads it and inserts a https://github.com/user-attachments/assets/... link,
-  which renders as an inline player.
--->
-> 🎬 *Demo video coming soon.*
+<p align="center">
+  <a href="docs/demo.mp4">
+    <img src="docs/demo-poster.jpg" alt="Demo: after going over the YouTube limit, the BAS KAR BHAI! overlay slams onto the page and plays a video at full volume" width="720" />
+  </a>
+</p>
+
+<p align="center"><sub>15 seconds, with sound. Click to watch.</sub></p>
 
 ## Screenshot
 
@@ -94,7 +93,7 @@ extension/
   media/default.mp4    bundled blast video
   icons/
 scripts/make_assets.py regenerates the default video and icons from scratch
-docs/                  README images
+docs/                  README images and demo video
 ```
 
 There's no build step and no dependencies: the `extension/` folder is loaded as-is.
