@@ -1,5 +1,7 @@
 # Bas Kar Bhai 🚨
 
+[![Tests](https://github.com/rishi-chauhan/bas-kar-bhai/actions/workflows/test.yml/badge.svg)](https://github.com/rishi-chauhan/bas-kar-bhai/actions/workflows/test.yml)
+
 *बस कर भाई — "enough, bro."*
 
 A screen-time tracker with consequences. Set a daily limit for YouTube, Instagram, X, whatever eats your day. When you blow past it, **a video slams onto your screen and blasts at full volume**. Everyone around you hears it, you get embarrassed, and you close the tab. That's the whole idea.
@@ -154,6 +156,8 @@ CHROME_PATH=/path/to/chromium npm run test:e2e
 ```
 
 Without a browser, those tests are skipped. The YouTube steps are skipped when YouTube can't be reached. The browser runs muted, so nothing blasts while you test.
+
+GitHub Actions runs the full suite with Chrome for Testing on every push to `main` and on every pull request ([`.github/workflows/test.yml`](.github/workflows/test.yml)).
 
 ## License
 
