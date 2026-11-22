@@ -6,7 +6,7 @@
 
 A screen-time tracker with consequences. Set a daily limit for YouTube, Instagram, X, whatever eats your day. When you blow past it, **a video slams onto your screen and blasts at full volume**. Everyone around you hears it, you get embarrassed, and you close the tab. That's the whole idea.
 
-It's a Chrome extension (works in Chrome, Brave, Edge and other Chromium browsers). A phone version is on the roadmap.
+It's a Chrome extension (works in Chrome, Brave, Edge and other Chromium browsers).
 
 ## Demo
 
@@ -121,7 +121,6 @@ Needs Python 3 + Pillow, `ffmpeg` with libx264/aac, and the Noto Sans + Noto San
 ## Roadmap
 
 - [ ] Chrome Web Store listing
-- [ ] Android app (UsageStats for tracking, overlay + max media volume for the blast)
 - [ ] Firefox build
 - [ ] Schedules (limits only on weekdays / work hours)
 - [ ] Weekly shame report
