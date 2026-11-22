@@ -4,7 +4,26 @@
 
 A screen-time tracker with consequences. Set a daily limit for YouTube, Instagram, X, whatever eats your day. When you blow past it, **a video slams onto your screen and blasts at full volume**. Everyone around you hears it, you get embarrassed, and you close the tab. That's the whole idea.
 
-Right now it's a Chrome extension (works in Chrome, Brave, Edge and other Chromium browsers). A phone version is on the roadmap.
+It's a Chrome extension (works in Chrome, Brave, Edge and other Chromium browsers). A phone version is on the roadmap.
+
+## Demo
+
+<!--
+  DEMO VIDEO PLACEHOLDER
+  To add the video: edit this file on github.com, delete this comment and the
+  line below it, then drag your .mp4 into the editor at this spot. GitHub
+  uploads it and inserts a https://github.com/user-attachments/assets/... link,
+  which renders as an inline player.
+-->
+> 🎬 *Demo video coming soon.*
+
+## Screenshot
+
+<p align="center">
+  <img src="docs/settings.png" alt="The Bas Kar Bhai settings page: daily limits per site, the blast video picker with a preview of the bundled siren, loudness and speaker options, nag and snooze timings, and a 7-day usage chart" width="720" />
+</p>
+
+<p align="center"><sub>The settings page. The usage chart shows sample data.</sub></p>
 
 ## Features
 
@@ -18,13 +37,36 @@ Right now it's a Chrome extension (works in Chrome, Brave, Edge and other Chromi
 - **Popup** with today's usage, **settings page** with a 7-day history.
 - **Private:** everything stays in your browser. No servers, no accounts, no analytics.
 
-## Install (developer mode)
+## Install
 
-1. Clone this repo.
+It isn't on the Chrome Web Store yet, so install it in developer mode:
+
+1. Download the code: `git clone https://github.com/rishi-chauhan/bas-kar-bhai.git`, or use **Code → Download ZIP** on GitHub and unzip it.
 2. Open `chrome://extensions` (or `brave://extensions`, `edge://extensions`).
-3. Turn on **Developer mode**.
-4. Click **Load unpacked** and pick the `extension/` folder.
+3. Turn on **Developer mode** (top right).
+4. Click **Load unpacked** and pick the `extension/` folder inside the repo.
 5. The settings page opens. Click **Find my speakers** (one-time microphone permission, see below), set your limits, turn the volume up, and hit **Test the blast**.
+
+To update later, `git pull` (or download the ZIP again) and click the reload icon on the extension's card in `chrome://extensions`.
+
+## Privacy and permissions
+
+Nothing you do is sent anywhere. There are no servers, accounts, analytics or trackers. Your usage history and settings live in `chrome.storage.local`, and your uploaded clip lives in the extension's IndexedDB. Both are deleted when you remove the extension.
+
+The only network requests the extension makes are to YouTube, and only if you choose a YouTube video for the blast (to show its title and to play it).
+
+Why it asks for what it asks for:
+
+| Permission | Why |
+| --- | --- |
+| Read your browsing history / access all sites (`tabs`, `<all_urls>`) | To see which site is in front of you, and to show the overlay on whatever site you're over the limit on. |
+| `idle` | To stop counting when you walk away (unless a video is playing). |
+| `storage`, `unlimitedStorage` | Settings, usage history, and your uploaded clip. |
+| `alarms` | A 30-second tick so time is counted even with no tab events. |
+| `scripting` | Injects the overlay into the offending tab. |
+| `offscreen` | A hidden page that plays the sound when a site blocks autoplay, or to reach the built-in speakers. |
+| `declarativeNetRequestWithHostAccess` | Adds a `Referer` header to the extension's own YouTube embeds so they play (details below). |
+| Microphone (optional, asked once) | Chrome only reveals your speaker names after mic access. The mic is released immediately and nothing is recorded. |
 
 ## How loud is "full volume"?
 
@@ -52,7 +94,10 @@ extension/
   media/default.mp4    bundled blast video
   icons/
 scripts/make_assets.py regenerates the default video and icons from scratch
+docs/                  README images
 ```
+
+There's no build step and no dependencies: the `extension/` folder is loaded as-is.
 
 ### How tracking works
 
@@ -76,11 +121,20 @@ Needs Python 3 + Pillow, `ffmpeg` with libx264/aac, and the Noto Sans + Noto San
 
 ## Roadmap
 
+- [ ] Chrome Web Store listing
 - [ ] Android app (UsageStats for tracking, overlay + max media volume for the blast)
 - [ ] Firefox build
 - [ ] Schedules (limits only on weekdays / work hours)
 - [ ] Weekly shame report
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. Please [open an issue](https://github.com/rishi-chauhan/bas-kar-bhai/issues) first for anything bigger than a small fix, so we can agree on the approach.
+
+To work on it: load `extension/` unpacked (see [Install](#install)), make your change, then hit the reload icon on the extension's card. Logs from the service worker show up under **Inspect views: service worker** on that card; the popup, settings page and overlay each have their own DevTools.
+
+Please keep it dependency-free and private: no build tools, no remote code, no network calls beyond YouTube.
+
 ## License
 
-MIT
+[MIT](LICENSE)
