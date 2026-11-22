@@ -11,8 +11,15 @@ permissions:
 
 jobs:
   test:
+    name: test (${{ matrix.browser }})
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chrome, firefox]
+    env:
+      BROWSER: ${{ matrix.browser }}
     steps:
       - uses: actions/checkout@v5
 
@@ -23,13 +30,25 @@ jobs:
       # Branded Google Chrome (preinstalled on the runner) ignores --load-extension,
       # so the browser tests use Chrome for Testing instead.
       - name: Install Chrome for Testing
+        if: matrix.browser == 'chrome'
         run: |
           out=$(npx --yes @puppeteer/browsers install chrome@stable --path "$RUNNER_TEMP/browsers")
           echo "$out"
           echo "CHROME_PATH=$(echo "$out" | tail -n1 | cut -d' ' -f2-)" >> "$GITHUB_ENV"
 
-      # Ubuntu 24.04 blocks the unprivileged user namespaces Chrome's sandbox needs.
-      - name: Allow Chrome's sandbox
+      - name: Install Firefox
+        if: matrix.browser == 'firefox'
+        run: |
+          out=$(npx --yes @puppeteer/browsers install firefox@stable --path "$RUNNER_TEMP/browsers")
+          echo "$out"
+          echo "FIREFOX_PATH=$(echo "$out" | tail -n1 | cut -d' ' -f2-)" >> "$GITHUB_ENV"
+
+      # Ubuntu 24.04 blocks the unprivileged user namespaces the browsers' sandboxes need.
+      - name: Allow the browser sandbox
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - run: npm test
+
+      - name: Lint for Firefox Add-ons
+        if: matrix.browser == 'firefox'
+        run: npm run lint:firefox

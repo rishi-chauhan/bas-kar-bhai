@@ -16,7 +16,7 @@ export function refererRule() {
     action: {
       type: 'modifyHeaders',
       requestHeaders: [
-        { header: 'referer', operation: 'set', value: `https://${chrome.runtime.id}.chromiumapp.org/` },
+        { header: 'referer', operation: 'set', value: `https://${refererLabel()}.chromiumapp.org/` },
       ],
     },
     condition: {
@@ -24,6 +24,13 @@ export function refererRule() {
       resourceTypes: ['sub_frame'],
     },
   };
+}
+
+// A hostname label unique to this install. Chrome's extension id is one;
+// Firefox's (e.g. "name@author") isn't, so use its per-install UUID instead.
+function refererLabel() {
+  const id = chrome.runtime.id;
+  return /^[a-p]{32}$/.test(id) ? id : new URL(chrome.runtime.getURL('')).host;
 }
 
 // "1m30s", "90", "1:30" -> 90

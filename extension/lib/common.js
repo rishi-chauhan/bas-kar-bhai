@@ -92,9 +92,16 @@ export function formatDuration(totalSeconds) {
   return `${s}s`;
 }
 
+// Firefox never lists audio devices to a page that isn't on screen (the
+// background page, where the sound plays), so there the blast can only use
+// whatever output is current.
+export const CAN_PICK_OUTPUT = !chrome.runtime.getURL('').startsWith('moz-extension:');
+
 export async function getSettings() {
   const { settings } = await chrome.storage.local.get('settings');
-  return { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  const merged = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  if (!CAN_PICK_OUTPUT) merged.outputMode = 'default';
+  return merged;
 }
 
 // Saves run one at a time: each one reads, merges and writes, so two quick

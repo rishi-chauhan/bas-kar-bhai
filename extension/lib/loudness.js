@@ -24,9 +24,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function attachBoost(media, { boostDb = 0, sinkId = '' } = {}) {
   if (!boostDb && !sinkId) return null;
 
+  // Firefox can't point an AudioContext at a device (it ignores `sinkId`), so
+  // there the boosted sound leaves through an <audio> element that can.
+  const ctxSink = sinkId && 'setSinkId' in AudioContext.prototype ? sinkId : '';
   let ctx;
   try {
-    ctx = new AudioContext(sinkId ? { sinkId, latencyHint: 'playback' } : { latencyHint: 'playback' });
+    ctx = new AudioContext(ctxSink ? { sinkId: ctxSink, latencyHint: 'playback' } : { latencyHint: 'playback' });
   } catch {
     // Device unplugged or not allowed: fall back to the default output.
     if (!boostDb) return null;
@@ -52,14 +55,38 @@ export async function attachBoost(media, { boostDb = 0, sinkId = '' } = {}) {
   limiter.attack.value = 0.002;
   limiter.release.value = 0.15;
 
-  source.connect(gain).connect(limiter).connect(ctx.destination);
+  source.connect(gain).connect(limiter);
+  if (sinkId && !ctxSink && (await routeToDevice(ctx, limiter, sinkId))) return ctx;
+  limiter.connect(ctx.destination);
   return ctx;
+}
+
+// Plays `node`'s output on device `sinkId` through an <audio> element, which
+// is stopped along with `ctx`. Returns false if the device can't be used.
+async function routeToDevice(ctx, node, sinkId) {
+  const stream = ctx.createMediaStreamDestination();
+  const out = new Audio();
+  try {
+    await out.setSinkId(sinkId);
+  } catch {
+    return false;
+  }
+  node.connect(stream);
+  out.srcObject = stream.stream;
+  out.play().catch(() => {});
+  const close = ctx.close.bind(ctx);
+  ctx.close = () => {
+    out.pause();
+    out.srcObject = null;
+    return close();
+  };
+  return true;
 }
 
 // ---------------------------------------------------------------------------
 // Output devices
 //
-// Chrome hides output devices (empty ids and labels) until the extension has
+// Browsers hide output devices (empty ids and labels) until the extension has
 // microphone permission, and gives no "this is the built-in speaker" flag,
 // only a name. So: ask for the mic once, then pick the speakers by name.
 
@@ -89,10 +116,13 @@ export function pickSpeaker(outputs) {
 }
 
 // Output devices currently connected, without prompting. Returns null if the
-// mic permission hasn't been granted (Chrome hides the devices until then).
+// mic permission hasn't been granted (browsers hide the devices until then).
 export async function currentOutputs() {
   try {
-    const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput');
+    // Firefox holds the answer back until the page is on screen, which a
+    // background page never is: don't wait forever.
+    const devices = await Promise.race([navigator.mediaDevices.enumerateDevices(), sleep(1500).then(() => [])]);
+    const all = devices.filter((d) => d.kind === 'audiooutput');
     if (!all.some((d) => d.label)) return null;
     return all
       .filter((d) => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications')

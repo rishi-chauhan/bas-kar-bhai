@@ -98,6 +98,18 @@ test('refererRule only targets our own embeds', () => {
   assert.equal(r.action.requestHeaders[0].value, `https://${chrome.runtime.id}.chromiumapp.org/`);
 });
 
+test('refererRule uses a valid hostname on Firefox', () => {
+  const saved = globalThis.chrome.runtime;
+  globalThis.chrome.runtime = { id: 'bas-kar-bhai@rishi-chauhan', getURL: (p) => `moz-extension://0d3c5a1e-1111-4222-8333-944455556666/${p}` };
+  try {
+    const value = yt.refererRule().action.requestHeaders[0].value;
+    assert.equal(value, 'https://0d3c5a1e-1111-4222-8333-944455556666.chromiumapp.org/');
+    assert.equal(new URL(value).username, '');
+  } finally {
+    globalThis.chrome.runtime = saved;
+  }
+});
+
 test('pickSpeaker prefers built-in speakers, skips headphones/HDMI/virtual', () => {
   const pick = (labels) => loud.pickSpeaker(labels.map((label, i) => ({ id: String(i), label })))?.label ?? null;
   assert.equal(pick(['WH-1000XM4', 'MacBook Pro Speakers']), 'MacBook Pro Speakers');

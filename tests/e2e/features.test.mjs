@@ -8,9 +8,9 @@ import { test } from 'node:test';
 import { copyFileSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EXT_DIR, findBrowser, launch, serve, connect, waitFor, sleep, problems, online } from './browser.mjs';
+import { EXT_DIR, skipReason, launch, serve, connect, waitFor, sleep, problems, online } from './browser.mjs';
 
-const skip = findBrowser() ? false : 'no Chromium-based browser found (set CHROME_PATH)';
+const skip = skipReason();
 const youtubeSkip = skip || ((await online()) ? false : 'YouTube is not reachable');
 const LIMITED = '127.0.0.1';
 
@@ -43,26 +43,28 @@ if (skip) {
   const web = await serve(fixtures);
   const PAGE = `http://127.0.0.1:${web.port}/`;
   // Block autoplay-with-sound like a page nobody has clicked yet, so the
-  // offscreen fallback is exercised every time.
-  const b = await launch({ flags: ['--autoplay-policy=document-user-activation-required'] });
+  // background-sound fallback is exercised every time.
+  const b = await launch({ autoplayBlocked: true });
 
   try {
-    // Watch the service worker for errors the whole time.
-    const swT = await waitFor(async () => (await b.targets()).find((t) => t.type === 'service_worker' && t.url.startsWith(b.base)), { what: 'service worker' });
-    const sw = await connect(swT, 'service worker');
+    // Watch Chrome's service worker for errors the whole time. (Firefox's
+    // background page isn't reachable over WebDriver BiDi.)
+    if (b.kind === 'chrome') {
+      const swT = await waitFor(async () => (await b.targets()).find((t) => t.type === 'service_worker' && t.url.startsWith(b.base)), { what: 'service worker' });
+      await connect(swT, 'service worker');
+    }
 
     const optT = await b.open(`${b.base}/options/options.html`);
     const o = await connect(optT, 'options');
-    await o.cdp('Page.enable');
     // Any real dialog is accepted (the reset buttons' confirm() is stubbed below for determinism).
-    o.on((m) => { if (m.method === 'Page.javascriptDialogOpening') o.cdp('Page.handleJavaScriptDialog', { accept: true }); });
+    await o.acceptDialogs();
     await waitFor(() => o.ev(`document.getElementById('limits').children.length > 0`), { what: 'options render' });
 
     const ev = o.ev;
     // Reload the settings page and wait for the *new* document to finish rendering.
     async function reloadOptions() {
       await o.ev(`window.__stale = true`);
-      await o.cdp('Page.reload');
+      await o.reload();
       await waitFor(() => o.ev(`!window.__stale && document.querySelectorAll('#history .day').length === 7 && document.getElementById('limits').children.length > 0`), { what: 'options reload' });
     }
     const refresh = () => ev(`chrome.runtime.sendMessage({ type: 'BKB_REFRESH' }).then((r) => r.ok)`);
@@ -81,7 +83,7 @@ if (skip) {
       const t = await b.open(url);
       const p = await connect(t, 'page ' + path);
       await b.activate(t.id);
-      await p.cdp('Page.bringToFront');
+      await p.front();
       await waitFor(() => p.ev(`document.readyState === 'complete'`), { what: 'page load' });
       return { t, p, tabId: await tabIdFor(url) };
     }
@@ -93,17 +95,8 @@ if (skip) {
       await waitFor(() => f.ev(`document.getElementById('stats').textContent.length > 0`), { what: 'overlay stats' });
       return f;
     }
-    async function offscreen() {
-      const t = (await b.targets()).find((t) => t.url.startsWith(`${b.base}/offscreen/`));
-      return t ? connect(t, 'offscreen') : null;
-    }
-    const offscreenPlaying = async () => {
-      const off = await offscreen();
-      if (!off) return false;
-      const r = await off.ev(`(() => { const a = document.querySelector('audio'); return !!a && !a.paused && a.currentTime > 0; })()`);
-      off.close();
-      return r;
-    };
+    // Is the sound playing in the background (Chrome's offscreen page, Firefox's background page)?
+    const backgroundPlaying = () => ev(`chrome.runtime.sendMessage({ type: 'BKB_AUDIO_STATUS' }).then((r) => r.playing)`);
 
     await ev(`(async () => { await chrome.storage.local.set({ settings: { ...(await chrome.storage.local.get('settings')).settings,
       limits: [{ site: '${LIMITED}', minutes: 2 }], outputMode: 'default', boostDb: 12 }, usage: {}, nag: null }); return true; })()`);
@@ -124,12 +117,12 @@ if (skip) {
       const other = `http://localhost:${web.port}/other.html`;
       const t = await b.open(other);
       const p = await connect(t, 'other');
-      await b.activate(t.id); await p.cdp('Page.bringToFront');
+      await b.activate(t.id); await p.front();
       await sleep(800); await refresh(); await sleep(2500); await refresh();
       const tabId = await tabIdFor(other);
       const r = { localhost: await usageOf('localhost'), badge: await badge(tabId) };
       p.close(); await b.close(t.id);
-      await b.activate(pg.t.id); await pg.p.cdp('Page.bringToFront'); await sleep(500); await refresh();
+      await b.activate(pg.t.id); await pg.p.front(); await sleep(500); await refresh();
       return check(r.localhost >= 1.5 && r.badge === '', 'unlimited site', r);
     });
 
@@ -165,11 +158,21 @@ if (skip) {
       await sleep(1600);
       return check(await pg.p.ev(`document.getElementById('pv').paused`), 'page video resumed during blast');
     });
-    await t('sound blocked in the page -> it plays from the offscreen page instead', async () => {
-      await waitFor(offscreenPlaying, { what: 'offscreen audio playing' });
-      const r = await f.ev(`({ muted: document.getElementById('video').muted, playing: !document.getElementById('video').paused, hint: document.getElementById('soundHint').hidden ? null : document.getElementById('soundHint').textContent })`);
-      return check(r.muted && r.playing && r.hint, 'overlay picture plays muted with a hint', r);
-    });
+    const overlaySound = () => f.ev(`({ muted: document.getElementById('video').muted, playing: !document.getElementById('video').paused, hint: document.getElementById('soundHint').hidden ? null : document.getElementById('soundHint').textContent })`);
+    if (b.kind === 'chrome') {
+      await t('sound blocked in the page -> it plays in the background instead', async () => {
+        await waitFor(backgroundPlaying, { what: 'background audio playing' });
+        const r = await overlaySound();
+        return check(r.muted && r.playing && r.hint, 'overlay picture plays muted with a hint', r);
+      });
+    } else {
+      // Firefox's autoplay blocking doesn't apply to extension frames, so the
+      // overlay plays with sound even on a page nobody has clicked.
+      await t('sound blocked in the page -> the overlay still plays with sound', async () => {
+        const r = await waitFor(async () => { const r = await overlaySound(); return r.playing && r; }, { what: 'overlay playing' });
+        return check(!r.muted && !r.hint && !(await backgroundPlaying()), 'overlay plays with sound itself', r);
+      });
+    }
     await t('"5 min aur" is locked until the video plays through once', async () => {
       const locked = await f.ev(`document.getElementById('snooze').disabled`);
       check(locked, 'snooze should start disabled');
@@ -189,7 +192,7 @@ if (skip) {
     await t('snooze closes the overlay, stops the sound and gives 5 minutes', async () => {
       await f.ev(`document.getElementById('snooze').click(), true`, { gesture: true });
       await waitFor(async () => (await overlayCount(pg.p)) === 0, { what: 'overlay removed' });
-      await waitFor(async () => !(await offscreenPlaying()), { what: 'offscreen stopped' });
+      await waitFor(async () => !(await backgroundPlaying()), { what: 'background audio stopped' });
       const nag = await local('nag');
       const inMin = (nag.next[LIMITED] - Date.now()) / 60000;
       return check(inMin > 4.5 && inMin <= 5, 'about 5 minutes', { inMin });
@@ -213,7 +216,7 @@ if (skip) {
     await t('"Close this tab" closes the tab', async () => {
       await f.ev(`document.getElementById('closeTab').click(), true`, { gesture: true });
       await waitFor(async () => !(await b.targets()).some((t) => t.id === pg.t.id), { what: 'tab closed' });
-      await waitFor(async () => !(await offscreenPlaying()), { what: 'offscreen stopped' });
+      await waitFor(async () => !(await backgroundPlaying()), { what: 'background audio stopped' });
       return true;
     });
 
@@ -258,23 +261,40 @@ if (skip) {
       await setSettings({ pausePageMedia: true });
       return check(playing, 'page video was paused anyway');
     });
-    await t('speakers mode ("auto") always plays the sound from the offscreen page', async () => {
+    await t('the background player plays and stops on request', async () => {
+      await ev(`chrome.runtime.sendMessage({ type: 'BKB_PLAY_AUDIO', video: 'default', boostDb: 12, outputMode: 'default' })`);
+      await waitFor(backgroundPlaying, { what: 'background audio playing' });
+      await ev(`chrome.runtime.sendMessage({ type: 'BKB_STOP_AUDIO' })`);
+      return check(await waitFor(async () => !(await backgroundPlaying()), { what: 'background audio stopped' }), 'stopped');
+    });
+
+    // Firefox can't pick an output device for extensions, so there is no speakers mode.
+    const chromeOnly = b.kind === 'chrome' ? {} : { skip: 'Firefox has no speakers mode' };
+    await t('speakers mode ("auto") always plays the sound in the background', async () => {
       await setSettings({ outputMode: 'auto' });
       const p6 = await openPage('?auto');
       await ev(`chrome.storage.local.set({ nag: null }).then(() => true)`); await refresh();
       await waitFor(async () => (await overlayCount(p6.p)) === 1, { what: 'overlay' });
       const f6 = await overlayFrame(p6.t, seen);
-      await waitFor(offscreenPlaying, { what: 'offscreen audio' });
+      await waitFor(backgroundPlaying, { what: 'background audio' });
       const r = await f6.ev(`({ muted: document.getElementById('video').muted, hint: document.getElementById('soundHint').textContent })`);
       await f6.ev(`document.getElementById('closeTab').click(), true`, { gesture: true });
       await waitFor(async () => !(await b.targets()).some((t) => t.id === p6.t.id), { what: 'tab closed' });
       await setSettings({ outputMode: 'default' });
-      return check(r.muted, 'overlay video should be muted (sound comes from offscreen)', r);
-    });
+      return check(r.muted, 'overlay video should be muted (sound comes from the background)', r);
+    }, chromeOnly);
+    await t('Firefox: the speaker picker is replaced by a note, and settings say "whatever I\'m listening on"', async () => {
+      await setSettings({ outputMode: 'auto' });
+      await reloadOptions();
+      const r = await ev(`(async () => ({ picker: !document.querySelector('.speakers').hidden, note: !document.getElementById('noSpeakers').hidden,
+        setup: !document.getElementById('setup').hidden, mode: (await import('../lib/common.js').then((m) => m.getSettings())).outputMode }))()`);
+      await setSettings({ outputMode: 'default' });
+      return check(!r.picker && r.note && !r.setup && r.mode === 'default', 'no speakers mode', r);
+    }, b.kind === 'firefox' ? {} : { skip: 'Firefox only' });
 
     // ------------------------------------------------------------------ settings page
     await reloadOptions();
-    await b.activate(optT.id); await o.cdp('Page.bringToFront');
+    await b.activate(optT.id); await o.front();
 
     await t('add a limit from a messy URL', async () => {
       await ev(`document.getElementById('addSite').value = 'https://www.Reddit.com/r/all'; document.getElementById('addMinutes').value = '25'; document.getElementById('addForm').requestSubmit(), true`);
@@ -308,11 +328,7 @@ if (skip) {
     });
 
     // --- custom video
-    const fileInput = async (path) => {
-      const { root } = (await o.cdp('DOM.getDocument')).result;
-      const { nodeId } = (await o.cdp('DOM.querySelector', { nodeId: root.nodeId, selector: '#file' })).result;
-      await o.cdp('DOM.setFileInputFiles', { nodeId, files: [path] });
-    };
+    const fileInput = (path) => o.setFiles('#file', [path]);
     await t('a file over 60 MB is refused', async () => {
       await fileInput(join(fixtures, 'huge.mp4'));
       const t = await waitFor(() => ev(`!document.getElementById('toast').hidden && document.getElementById('toast').textContent`), { what: 'toast' });
@@ -360,7 +376,7 @@ if (skip) {
       return check(src === 'blob:' && times.every((t) => t >= 1.9 && t <= 4.3), 'custom clip in blast', { src, times: times.map((t) => t.toFixed(1)) });
     });
     await t('remove the custom video', async () => {
-      await b.activate(optT.id); await o.cdp('Page.bringToFront');
+      await b.activate(optT.id); await o.front();
       await ev(`document.getElementById('removeCustom').click(), true`);
       const s = await waitFor(async () => { const s = await settings(); return s.video === 'default' && s; }, { what: 'back to default' });
       const r = await waitFor(() => ev(`document.getElementById('customName').textContent === 'No custom video yet.' && document.getElementById('preview').src.endsWith('/media/default.mp4') && document.getElementById('customRadio').disabled`), { what: 'UI reset' });
@@ -418,12 +434,13 @@ if (skip) {
       await waitFor(async () => (await settings()).enabled === true, { what: 're-armed' });
       p.close(); await b.close(t.id);
       await setSettings({ outputMode: 'default' });
-      return check(r.rows[0] === LIMITED && r.over && r.others.includes('localhost') && r.notice && r.armed && off && synced, 'popup', r);
+      // No speakers mode on Firefox, so nothing to nag about there.
+      return check(r.rows[0] === LIMITED && r.over && r.others.includes('localhost') && r.notice === (b.kind === 'chrome') && r.armed && off && synced, 'popup', r);
     });
 
     // --- history and reset
     await t('7-day history and reset buttons', async () => {
-      await b.activate(optT.id); await o.cdp('Page.bringToFront');
+      await b.activate(optT.id); await o.front();
       await reloadOptions();
       const todayTotal = await ev(`[...document.querySelectorAll('#history .day')].pop().querySelector('.total').textContent`);
       await ev(`(async () => { const { usage } = await chrome.storage.local.get('usage'); usage['2000-01-01'] = { 'old.com': 5 }; await chrome.storage.local.set({ usage }); return true; })()`);

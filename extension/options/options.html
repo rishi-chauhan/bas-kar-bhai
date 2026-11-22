@@ -15,9 +15,18 @@
       <p class="muted">Set a limit. Blow past it. Get blasted at full volume. Close the tab out of shame.</p>
     </header>
 
+    <section class="card setup" id="access" hidden>
+      <h2>🔒 We can't see which sites you're on</h2>
+      <p>Access to all websites is switched off for this extension, so nothing is being tracked and nothing will
+        blast. We only use it to read the address of the tab in front of you and to show the video on top.</p>
+      <div class="row">
+        <button id="grantAccess" type="button">Allow access to all websites</button>
+      </div>
+    </section>
+
     <section class="card setup" id="setup" hidden>
       <h2>🔊 One last step: let us find your speakers</h2>
-      <p>The blast plays on your built-in speakers, even if you're wearing Bluetooth headphones. Chrome only shows
+      <p>The blast plays on your built-in speakers, even if you're wearing Bluetooth headphones. Your browser only shows
         an extension your speakers after you allow <strong>microphone</strong> access. The mic is switched off the
         instant it's allowed. Nothing is ever recorded or sent anywhere.</p>
       <div class="row">
@@ -97,6 +106,8 @@
         and uploaded files. YouTube videos play at YouTube's own 100% and can't be boosted, so for maximum damage
         upload your clip as a file.</small>
 
+      <p id="noSpeakers" class="muted" hidden>Firefox doesn't let extensions choose a speaker, so the blast plays on
+        whatever you're listening on, headphones included.</p>
       <div class="speakers">
         <label class="field">Blast on
           <select id="output" aria-label="Output device"></select>

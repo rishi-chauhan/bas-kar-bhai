@@ -7,6 +7,7 @@ import {
   normalizeSite,
   secondsForSite,
   formatDuration,
+  CAN_PICK_OUTPUT,
 } from '../lib/common.js';
 import { saveCustomVideo, loadCustomVideo, deleteCustomVideo, resolveVideoUrl } from '../lib/media-db.js';
 import { parseYouTubeUrl, parseTime, fetchVideoInfo, createPlayer } from '../lib/youtube.js';
@@ -231,12 +232,18 @@ window.addEventListener('message', (e) => {
 $('boost').replaceChildren(...BOOST_LEVELS.map(({ db, label }) => option(String(db), label)));
 $('boost').addEventListener('change', (e) => update({ boostDb: Number(e.target.value) }));
 
-// Connected outputs, or null while Chrome hides them (no mic permission).
+// Connected outputs, or null while the browser hides them (no mic permission).
 let outputs = null;
 let micState = 'prompt';
 
 async function renderLoudness() {
   $('boost').value = String(settings.boostDb);
+  if (!CAN_PICK_OUTPUT) {
+    document.querySelector('.speakers').hidden = true;
+    $('noSpeakers').hidden = false;
+    $('setup').hidden = true;
+    return;
+  }
   micState = await micPermission();
   outputs = micState === 'granted' ? await currentOutputs() : null;
   renderOutputs();
@@ -266,7 +273,7 @@ function renderOutputs() {
     warn = true;
     status =
       micState === 'denied'
-        ? "Microphone access is blocked for this extension, so Chrome won't show your speakers. Allow it in the browser's site settings for this extension. Until then the blast plays on whatever you're listening on."
+        ? "Microphone access is blocked for this extension, so the browser won't show your speakers. Allow it in the browser's site settings for this extension. Until then the blast plays on whatever you're listening on."
         : "Speakers not found yet. Use “Find my speakers” above. Until then the blast plays on whatever you're listening on.";
   } else if (mode === 'manual' && savedConnected) {
     status = `✓ Blasting on ${saved.label}`;
@@ -297,7 +304,7 @@ $('findSpeakers').addEventListener('click', async () => {
     micState = await micPermission();
     showError(
       'setupError',
-      "Chrome didn't allow it, so we can't see your speakers. If you clicked Block, allow the microphone in the browser's site settings for this extension and try again."
+      "The browser didn't allow it, so we can't see your speakers. If you clicked Block, allow the microphone in the browser's site settings for this extension and try again."
     );
   }
 });
@@ -320,6 +327,26 @@ navigator.permissions
   ?.query({ name: 'microphone' })
   .then((p) => (p.onchange = renderLoudness))
   .catch(() => {});
+
+// ---------------------------------------------------------------------------
+// Site access. Firefox lets you switch it off in the add-ons manager, and then
+// nothing gets tracked at all.
+
+const ALL_SITES = { origins: ['<all_urls>'] };
+
+async function renderAccess() {
+  $('access').hidden = await chrome.permissions.contains(ALL_SITES).catch(() => true);
+}
+
+$('grantAccess').addEventListener('click', async () => {
+  if (await chrome.permissions.request(ALL_SITES).catch(() => false)) {
+    chrome.runtime.sendMessage({ type: 'BKB_REFRESH' }).catch(() => {});
+  }
+  renderAccess();
+});
+chrome.permissions.onAdded?.addListener(renderAccess);
+chrome.permissions.onRemoved?.addListener(renderAccess);
+renderAccess();
 
 // ---------------------------------------------------------------------------
 // Behaviour

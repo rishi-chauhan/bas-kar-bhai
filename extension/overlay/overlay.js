@@ -11,7 +11,7 @@ import { $, el } from '../lib/dom.js';
 // worker issued for this very tab, and a test preview must sit inside one of
 // our own pages.
 const params = new URLSearchParams(location.search);
-const isTest = params.has('test') && location.ancestorOrigins?.[0] === location.origin;
+const isTest = params.has('test') && framedByExtension();
 const blastInfo = isTest ? {} : await claimBlast(params.get('token'));
 if (!blastInfo) {
   document.documentElement.hidden = true;
@@ -20,6 +20,18 @@ if (!blastInfo) {
 const site = blastInfo.site || 'this site';
 const usedSec = Number(blastInfo.used || 0);
 const limitMin = Number(blastInfo.limit || 0);
+
+// Is the direct parent one of our own pages? (Firefox has no
+// location.ancestorOrigins; reading a cross-origin parent's location throws.)
+function framedByExtension() {
+  if (window.parent === window) return false;
+  if (location.ancestorOrigins) return location.ancestorOrigins[0] === location.origin;
+  try {
+    return window.parent.location.origin === location.origin;
+  } catch {
+    return false;
+  }
+}
 
 async function claimBlast(token) {
   if (!token) return null;
@@ -31,6 +43,7 @@ const video = $('video');
 const closeTabBtn = $('closeTab');
 const snoozeBtn = $('snooze');
 let audioInBackground = false;
+let keepAlive = null;
 let ytPlayer = null;
 
 const settings = await getSettings();
@@ -65,9 +78,9 @@ function unlockSnooze() {
   $('fine').textContent = 'Fine. But we will be back.';
 }
 
-// The extension's hidden offscreen page plays the sound instead of this
-// frame: to reach the built-in speakers, or because the site blocked sound.
-// Resolves to the offscreen page's answer ({ ok, device }).
+// The extension plays the sound in the background instead of this frame: to
+// reach the built-in speakers, or because the site blocked sound.
+// Resolves to the background's answer ({ ok, device }).
 async function soundFromBackground(choice) {
   if (audioInBackground) return { ok: true };
   audioInBackground = true;
@@ -83,6 +96,8 @@ async function soundFromBackground(choice) {
     })
     .catch((err) => ({ ok: false, error: String(err) }));
   if (res?.ok) {
+    // Firefox unloads an idle background page, sound and all.
+    keepAlive ||= setInterval(() => chrome.runtime.sendMessage({ type: 'BKB_KEEPALIVE' }).catch(() => {}), 10000);
     $('soundHint').textContent = res.device ? `🔊 blasting on ${res.device}` : '🔊 sound playing in the background';
     $('soundHint').hidden = false;
   } else {
@@ -121,7 +136,7 @@ async function playFile(choice) {
   try {
     await video.play();
   } catch {
-    // The site hasn't had a click yet, so Chrome blocks sound in the page.
+    // The site hasn't had a click yet, so the browser blocks sound in the page.
     video.muted = true;
     video.play().catch(() => {});
     soundFromBackground(choice);
@@ -195,6 +210,8 @@ function stopEverything() {
   video.pause();
   ytPlayer?.destroy();
   ytPlayer = null;
+  clearInterval(keepAlive);
+  keepAlive = null;
   chrome.runtime.sendMessage({ type: 'BKB_BLAST_DONE' }).catch(() => {});
   if (audioInBackground) return chrome.runtime.sendMessage({ type: 'BKB_STOP_AUDIO' }).catch(() => {});
 }

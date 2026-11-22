@@ -7,9 +7,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findBrowser, launch, serve, connect, waitFor } from './browser.mjs';
+import { skipReason, launch, serve, connect, waitFor } from './browser.mjs';
 
-const skip = findBrowser() ? false : 'no Chromium-based browser found (set CHROME_PATH)';
+const skip = skipReason();
 
 if (skip) {
   test('security tests', { skip }, () => {});
@@ -57,8 +57,8 @@ if (skip) {
         c.close();
         assert.deepEqual(state, { hidden: true, playing: false }, t.url.split('?')[1]);
       }
-      const offscreen = (await b.targets()).filter((t) => t.url.startsWith(`${b.base}/offscreen/`));
-      assert.equal(offscreen.length, 0, 'no background audio was started');
+      const audio = await o.ev(`chrome.runtime.sendMessage({ type: 'BKB_AUDIO_STATUS' }).then((r) => r.playing)`);
+      assert.equal(audio, false, 'no background audio was started');
     });
 
     await test('a blast token cannot be claimed by another tab or reused', async () => {

@@ -1,4 +1,4 @@
-// Bas Kar Bhai — background service worker.
+// Bas Kar Bhai — background service worker (Chrome) / event page (Firefox).
 //
 // How tracking works:
 //   * "current" (in chrome.storage.session) remembers which host is in front
@@ -193,7 +193,7 @@ async function blast(tabId, info) {
     await chrome.scripting.executeScript({ target: { tabId }, files: ['content/inject.js'] });
     await chrome.tabs.sendMessage(tabId, { type: 'BKB_SHOW', query, pauseMedia: info.pauseMedia });
   } catch (err) {
-    // Some pages (Chrome Web Store, PDFs, ...) don't allow scripts.
+    // Some pages (browser stores, PDFs, ...) don't allow scripts.
     console.warn('[bas-kar-bhai] could not show overlay on tab', tabId, err);
   }
 }
@@ -245,8 +245,14 @@ async function keepUnmuted(tabId) {
   if ((blasting[tabId] || 0) > Date.now()) chrome.tabs.update(tabId, { muted: false }).catch(() => {});
 }
 
-// If the page refuses to autoplay sound in the overlay, an offscreen
-// document (an invisible extension page) plays the audio instead.
+// If the page refuses to autoplay sound in the overlay, the extension plays
+// it somewhere invisible instead (see lib/player.js). Chrome needs an
+// offscreen document for that. Firefox has none, but its background page has
+// a DOM, so it plays right here.
+const HAS_OFFSCREEN = !!chrome.offscreen;
+let localPlayer = null;
+const player = () => (localPlayer ||= import('./lib/player.js'));
+
 let creatingOffscreen = null;
 async function ensureOffscreen() {
   if (await chrome.offscreen.hasDocument()) return;
@@ -260,11 +266,11 @@ async function ensureOffscreen() {
   await creatingOffscreen;
 }
 
-async function playOffscreen({ video, youtube, clip, boostDb, outputMode, outputDevice }) {
+async function playAudio({ video, youtube, clip, boostDb, outputMode, outputDevice }) {
+  const opts = { video, youtube, clip, boostDb, outputMode, outputDevice };
+  if (!HAS_OFFSCREEN) return (await player()).play(opts);
   await ensureOffscreen();
-  const res = await chrome.runtime.sendMessage({
-    target: 'offscreen', type: 'PLAY', video, youtube, clip, boostDb, outputMode, outputDevice,
-  });
+  const res = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'PLAY', ...opts });
   if (res && !res.ok) throw new Error(res.error);
   return { device: res?.device ?? null };
 }
@@ -276,10 +282,19 @@ async function endBlast(tabId) {
   await chrome.storage.session.set({ blasting });
 }
 
-async function stopOffscreen() {
+async function stopAudio() {
+  if (!HAS_OFFSCREEN) return localPlayer && (await localPlayer).stop();
   if (await chrome.offscreen.hasDocument()) {
     await chrome.runtime.sendMessage({ target: 'offscreen', type: 'STOP' });
   }
+}
+
+// Whether the background sound is playing: { playing }.
+async function audioStatus() {
+  if (!HAS_OFFSCREEN) return localPlayer ? (await localPlayer).status() : { playing: false };
+  if (!(await chrome.offscreen.hasDocument())) return { playing: false };
+  const res = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'STATUS' });
+  return { playing: !!res?.playing };
 }
 
 // ---------------------------------------------------------------------------
@@ -306,9 +321,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'BKB_CLOSE_TAB':
       return reply(sender.tab?.id != null ? chrome.tabs.remove(sender.tab.id) : Promise.resolve());
     case 'BKB_PLAY_AUDIO':
-      return reply(playOffscreen(msg));
+      return reply(playAudio(msg));
     case 'BKB_STOP_AUDIO':
-      return reply(stopOffscreen());
+      return reply(stopAudio());
+    case 'BKB_AUDIO_STATUS':
+      return reply(audioStatus());
+    // Sent by the overlay while the background plays the sound, so Firefox
+    // doesn't unload its idle background page mid-blast.
+    case 'BKB_KEEPALIVE':
+      return reply(Promise.resolve());
     case 'BKB_BLAST_DONE':
       return reply(endBlast(sender.tab?.id));
   }
