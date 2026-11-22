@@ -8,11 +8,9 @@ It's a Chrome extension (works in Chrome, Brave, Edge and other Chromium browser
 
 ## Demo
 
-<p align="center">
-  <a href="docs/demo.mp4">
-    <img src="docs/demo-poster.jpg" alt="Demo: after going over the YouTube limit, the BAS KAR BHAI! overlay slams onto the page and plays a video at full volume" width="720" />
-  </a>
-</p>
+https://github.com/user-attachments/assets/ae683ed9-98fa-4c89-b72c-3ecc9dd146eb
+
+
 
 <p align="center"><sub>15 seconds, with sound. Click to watch.</sub></p>
 
