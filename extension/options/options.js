@@ -161,7 +161,9 @@ $('ytForm').addEventListener('submit', async (e) => {
   toast(title ? `“${title}” it is` : 'YouTube video saved');
 });
 
-function clipText({ start = 0, end = 0 } = {}) {
+// `clip` may be null (no start/stop times set), which a destructuring default doesn't cover.
+function clipText(clip) {
+  const { start = 0, end = 0 } = clip || {};
   if (end) return `plays ${formatClock(start)}–${formatClock(end)} on repeat`;
   if (start) return `plays from ${formatClock(start)} to the end, on repeat`;
   return 'plays the whole video on repeat';
