@@ -1,0 +1,14 @@
+{
+  "name": "bas-kar-bhai",
+  "private": true,
+  "description": "Test scripts only. The extension itself has no build step and no dependencies.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/",
+    "test:unit": "node --test tests/unit.test.mjs",
+    "test:e2e": "node --test --test-concurrency=1 tests/e2e/"
+  }
+}

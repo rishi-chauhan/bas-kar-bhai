@@ -89,10 +89,12 @@ extension/
   media/default.mp4    bundled blast video
   icons/
 scripts/make_assets.py regenerates the default video and icons from scratch
+tests/                 unit tests, plus browser tests that drive the real extension
 docs/                  README screenshot
+package.json           test scripts only
 ```
 
-There's no build step and no dependencies: the `extension/` folder is loaded as-is.
+There's no build step and no dependencies: the `extension/` folder is loaded as-is. `package.json` only holds the test scripts.
 
 ### How tracking works
 
@@ -128,7 +130,30 @@ Bug reports, ideas and pull requests are welcome. Please [open an issue](https:/
 
 To work on it: load `extension/` unpacked (see [Install](#install)), make your change, then hit the reload icon on the extension's card. Logs from the service worker show up under **Inspect views: service worker** on that card; the popup, settings page and overlay each have their own DevTools.
 
+Please run the tests before opening a pull request (see [Testing](#testing)), and add a test when you fix a bug or add a feature.
+
 Please keep it dependency-free and private: no build tools, no remote code, no network calls beyond YouTube.
+
+### Testing
+
+The tests need Node.js 22 or newer and nothing else: no `npm install`.
+
+```bash
+npm test
+```
+
+That runs everything (about a minute). You can also run the parts on their own:
+
+- `npm run test:unit`: the pure helpers (site matching, time and YouTube link parsing, speaker picking, clip looping, settings saves). Takes under a second, no browser needed.
+- `npm run test:e2e`: loads the real extension into a headless browser and uses it the way a person would. It tracks time, goes over a limit, sits through the blast, snoozes, closes the tab, uploads a clip, picks a YouTube video, uses the popup and resets history. It also checks that websites can't trigger the overlay, and fails if any extension page logs an error.
+
+The browser tests need a Chromium-based browser that still allows loading unpacked extensions from the command line: Chromium, [Chrome for Testing](https://developer.chrome.com/blog/chrome-for-testing) or Brave. Branded Google Chrome 137+ doesn't. They find one on your `PATH`; otherwise point `CHROME_PATH` at it:
+
+```bash
+CHROME_PATH=/path/to/chromium npm run test:e2e
+```
+
+Without a browser, those tests are skipped. The YouTube steps are skipped when YouTube can't be reached. The browser runs muted, so nothing blasts while you test.
 
 ## License
 
