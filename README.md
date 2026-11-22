@@ -10,9 +10,7 @@ It's a Chrome extension (works in Chrome, Brave, Edge and other Chromium browser
 
 https://github.com/user-attachments/assets/ae683ed9-98fa-4c89-b72c-3ecc9dd146eb
 
-
-
-<p align="center"><sub>15 seconds, with sound. Click to watch.</sub></p>
+<p align="center"><sub>15 seconds. Turn the sound on.</sub></p>
 
 ## Screenshot
 
@@ -91,7 +89,7 @@ extension/
   media/default.mp4    bundled blast video
   icons/
 scripts/make_assets.py regenerates the default video and icons from scratch
-docs/                  README images and demo video
+docs/                  README screenshot
 ```
 
 There's no build step and no dependencies: the `extension/` folder is loaded as-is.
