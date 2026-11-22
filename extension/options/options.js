@@ -12,8 +12,8 @@ import { saveCustomVideo, loadCustomVideo, deleteCustomVideo, resolveVideoUrl } 
 import { parseYouTubeUrl, parseTime, fetchVideoInfo, createPlayer } from '../lib/youtube.js';
 import { loopClip } from '../lib/loop.js';
 import { BOOST_LEVELS, pickSpeaker, currentOutputs, requestOutputs, micPermission } from '../lib/loudness.js';
+import { $, el } from '../lib/dom.js';
 
-const $ = (id) => document.getElementById(id);
 const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
 const QUICK_ADD = [
   ['youtube.com', 30], ['instagram.com', 15], ['x.com', 15], ['facebook.com', 15],
@@ -32,9 +32,9 @@ let stopPreviewLoop = null;
 function renderLimits() {
   $('limits').replaceChildren(
     ...settings.limits.map((limit, i) => {
-      const li = document.createElement('li');
+      const li = el('li');
       const site = el('span', 'site', limit.site);
-      const minutes = document.createElement('input');
+      const minutes = el('input');
       minutes.type = 'number';
       minutes.min = '1';
       minutes.max = '1440';
@@ -65,13 +65,11 @@ function renderLimits() {
 
 async function addLimit(rawSite, minutes) {
   const site = normalizeSite(rawSite);
-  const err = $('addError');
   if (!site) {
-    err.textContent = "That doesn't look like a website. Try something like reddit.com";
-    err.hidden = false;
+    showError('addError', "That doesn't look like a website. Try something like reddit.com");
     return false;
   }
-  err.hidden = true;
+  showError('addError');
   const limits = settings.limits.filter((l) => l.site !== site);
   limits.push({ site, minutes: clampInt(minutes, 1, 1440, 20) });
   await update({ limits });
@@ -130,12 +128,8 @@ async function renderVideo() {
 
 $('ytForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const err = $('ytError');
-  const fail = (text) => {
-    err.textContent = text;
-    err.hidden = false;
-  };
-  err.hidden = true;
+  const fail = (text) => showError('ytError', text);
+  fail();
 
   const parsed = parseYouTubeUrl($('ytUrl').value);
   if (!parsed) return fail("That doesn't look like a YouTube link. Try https://youtu.be/… or a youtube.com/watch?v=… link.");
@@ -171,12 +165,8 @@ function clipText(clip) {
 
 $('clipForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const err = $('clipError');
-  const fail = (text) => {
-    err.textContent = text;
-    err.hidden = false;
-  };
-  err.hidden = true;
+  const fail = (text) => showError('clipError', text);
+  fail();
 
   const start = $('clipStart').value.trim() ? parseTime($('clipStart').value) : 0;
   const end = $('clipEnd').value.trim() ? parseTime($('clipEnd').value) : 0;
@@ -224,8 +214,7 @@ $('removeCustom').addEventListener('click', async () => {
 $('test').addEventListener('click', () => {
   $('preview').pause();
   ytPlayer?.pause();
-  const frame = document.createElement('iframe');
-  frame.className = 'test-frame';
+  const frame = el('iframe', 'test-frame');
   frame.allow = 'autoplay';
   frame.src = chrome.runtime.getURL('overlay/overlay.html?test=1');
   document.body.append(frame);
@@ -239,14 +228,7 @@ window.addEventListener('message', (e) => {
 // ---------------------------------------------------------------------------
 // Loudness
 
-$('boost').replaceChildren(
-  ...BOOST_LEVELS.map(({ db, label }) => {
-    const o = document.createElement('option');
-    o.value = String(db);
-    o.textContent = label;
-    return o;
-  })
-);
+$('boost').replaceChildren(...BOOST_LEVELS.map(({ db, label }) => option(String(db), label)));
 $('boost').addEventListener('change', (e) => update({ boostDb: Number(e.target.value) }));
 
 // Connected outputs, or null while Chrome hides them (no mic permission).
@@ -272,14 +254,7 @@ function renderOutputs() {
   ];
   const savedConnected = saved?.id && outputs?.some((d) => d.id === saved.id);
   if (mode === 'manual' && saved?.id && !savedConnected) choices.push([`manual:${saved.id}`, `${saved.label} (not connected)`]);
-  $('output').replaceChildren(
-    ...choices.map(([value, label]) => {
-      const o = document.createElement('option');
-      o.value = value;
-      o.textContent = label;
-      return o;
-    })
-  );
+  $('output').replaceChildren(...choices.map(([value, label]) => option(value, label)));
   $('output').value = mode === 'manual' && saved?.id ? `manual:${saved.id}` : mode;
 
   // Say plainly where the blast will go.
@@ -311,8 +286,7 @@ function renderOutputs() {
 }
 
 $('findSpeakers').addEventListener('click', async () => {
-  const err = $('setupError');
-  err.hidden = true;
+  showError('setupError');
   try {
     outputs = await requestOutputs();
     micState = 'granted';
@@ -321,9 +295,10 @@ $('findSpeakers').addEventListener('click', async () => {
     toast(speaker ? `Found them: ${speaker.label}` : 'Pick your speakers in section 3');
   } catch {
     micState = await micPermission();
-    err.textContent =
-      "Chrome didn't allow it, so we can't see your speakers. If you clicked Block, allow the microphone in the browser's site settings for this extension and try again.";
-    err.hidden = false;
+    showError(
+      'setupError',
+      "Chrome didn't allow it, so we can't see your speakers. If you clicked Block, allow the microphone in the browser's site settings for this extension and try again."
+    );
   }
 });
 
@@ -388,7 +363,7 @@ async function renderHistory() {
 
   const nodes = rows.map((r) => {
     const row = el('div', 'day');
-    const label = i18nDay(r.date, r.key === todayKey());
+    const label = dayLabel(r.date, r.key === todayKey());
     const stack = el('div', 'stack');
     stack.title = r.parts.map((s, i) => `${sites[i]}: ${formatDuration(s)}`).concat(`other: ${formatDuration(r.other)}`).join('\n');
     r.parts.forEach((secs, i) => secs > 0 && stack.append(seg(secs, max, SITE_COLORS[i])));
@@ -405,21 +380,21 @@ async function renderHistory() {
 }
 
 function seg(secs, max, color) {
-  const s = document.createElement('span');
+  const s = el('span');
   s.style.width = `${(secs / max) * 100}%`;
   s.style.background = color;
   return s;
 }
 
 function legendItem(text, color) {
-  const span = document.createElement('span');
-  const swatch = document.createElement('i');
+  const span = el('span');
+  const swatch = el('i');
   swatch.style.background = color;
   span.append(swatch, text);
   return span;
 }
 
-function i18nDay(date, isToday) {
+function dayLabel(date, isToday) {
   if (isToday) return 'Today';
   return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
 }
@@ -457,11 +432,16 @@ function clampInt(value, min, max, fallback) {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
 
-function el(tag, className = '', text = '') {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text) node.textContent = text;
-  return node;
+function option(value, label) {
+  const o = el('option', '', label);
+  o.value = value;
+  return o;
+}
+
+// Shows `text` in the error line `id`, or hides the line when there's no text.
+function showError(id, text = '') {
+  $(id).textContent = text;
+  $(id).hidden = !text;
 }
 
 let toastTimer;

@@ -41,7 +41,7 @@ export function deleteCustomVideo() {
   return run('readwrite', (s) => s.delete(CUSTOM_KEY));
 }
 
-export const DEFAULT_VIDEO_URL = chrome.runtime.getURL('media/default.mp4');
+const DEFAULT_VIDEO_URL = chrome.runtime.getURL('media/default.mp4');
 
 // URL of the video to play, honouring the user's choice. Falls back to the
 // bundled video if the custom one is missing.

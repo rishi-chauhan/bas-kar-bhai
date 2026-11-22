@@ -5,7 +5,8 @@
 // Marker on our own embed URLs. The background worker adds a Referer header
 // only to requests carrying it. Without a Referer, YouTube refuses to play
 // embeds inside extension pages ("Error 153").
-export const EMBED_MARKER = 'bkb=1';
+const EMBED_MARKER = 'bkb=1';
+const EMBED_ORIGIN = 'https://www.youtube-nocookie.com';
 export const REFERER_RULE_ID = 1;
 
 export function refererRule() {
@@ -63,7 +64,7 @@ export function parseYouTubeUrl(input) {
   return { id, start: Number.isFinite(start) ? start : 0 };
 }
 
-export function embedUrl({ id, start = 0, end = 0 }, { controls = false, autoplay = true } = {}) {
+function embedUrl({ id, start = 0, end = 0 }, { controls = false, autoplay = true } = {}) {
   const p = new URLSearchParams({
     autoplay: autoplay ? '1' : '0',
     controls: controls ? '1' : '0',
@@ -76,17 +77,17 @@ export function embedUrl({ id, start = 0, end = 0 }, { controls = false, autopla
   });
   if (start > 0) p.set('start', String(start));
   if (end > start) p.set('end', String(end));
-  return `https://www.youtube-nocookie.com/embed/${id}?${p}&${EMBED_MARKER}`;
+  return `${EMBED_ORIGIN}/embed/${id}?${p}&${EMBED_MARKER}`;
 }
 
-// Title and thumbnail, for showing the user what they picked.
+// The video's title, for showing the user what they picked.
 export async function fetchVideoInfo(id) {
   const res = await fetch(
     `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`
   );
   if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? 'embedding disabled' : `HTTP ${res.status}`);
   const data = await res.json();
-  return { title: data.title, author: data.author_name };
+  return { title: data.title };
 }
 
 // Embeds a player in `container` and returns a small controller.
@@ -112,17 +113,18 @@ export function createPlayer(
   let lapping = false;
   const start = Math.max(0, Number(video.start) || 0);
   const end = Number(video.end) > start ? Number(video.end) : 0;
-  const send = (func, args = []) =>
-    frame.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args, id: 1, channel: 'widget' }), '*');
+  const post = (message) => frame.contentWindow?.postMessage(JSON.stringify(message), EMBED_ORIGIN);
+  const send = (func, args = []) => post({ event: 'command', func, args, id: 1, channel: 'widget' });
 
   const onMessage = (event) => {
-    if (event.source !== frame.contentWindow) return;
+    if (event.source !== frame.contentWindow || event.origin !== EMBED_ORIGIN) return;
     let data;
     try {
       data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
     } catch {
       return;
     }
+    if (!data || typeof data !== 'object') return;
     if (!connected) {
       connected = true;
       onReady?.();
@@ -156,22 +158,18 @@ export function createPlayer(
   // The player only talks back after we say we're listening.
   const handshake = setInterval(() => {
     if (connected) return clearInterval(handshake);
-    frame.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+    post({ event: 'listening', id: 1, channel: 'widget' });
   }, 200);
   setTimeout(() => clearInterval(handshake), 15000);
 
   return {
-    frame,
     get state() { return state; },
     get muted() { return muted; },
     get connected() { return connected; },
-    get currentTime() { return currentTime; },
     play: () => send('playVideo'),
     pause: () => send('pauseVideo'),
-    seekTo: (seconds) => send('seekTo', [seconds, true]),
     mute: () => send('mute'),
-    unMute: () => send('unMute'),
-    setVolume: (v) => send('setVolume', [v]),
+    // Unmuted at volume 100.
     loud() { send('unMute'); send('setVolume', [100]); },
     destroy() {
       clearInterval(handshake);

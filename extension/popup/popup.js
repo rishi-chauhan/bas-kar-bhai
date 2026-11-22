@@ -8,8 +8,7 @@ import {
   formatDuration,
 } from '../lib/common.js';
 import { micPermission } from '../lib/loudness.js';
-
-const $ = (id) => document.getElementById(id);
+import { $, el } from '../lib/dom.js';
 
 async function render() {
   // Ask the worker to credit the last few seconds before we read.
@@ -55,13 +54,6 @@ async function render() {
     })
   );
   $('noOthers').hidden = others.length > 0;
-}
-
-function el(tag, className = '', text = '') {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text) node.textContent = text;
-  return node;
 }
 
 $('enabled').addEventListener('change', (e) => saveSettings({ enabled: e.target.checked }));

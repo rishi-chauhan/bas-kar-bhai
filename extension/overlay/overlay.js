@@ -3,6 +3,7 @@ import { resolveVideoUrl } from '../lib/media-db.js';
 import { createPlayer } from '../lib/youtube.js';
 import { attachBoost } from '../lib/loudness.js';
 import { loopClip } from '../lib/loop.js';
+import { $, el } from '../lib/dom.js';
 
 // This page has to be web-accessible so it can be framed on the offending
 // site, which means any website could frame it too. So it only runs when the
@@ -26,7 +27,6 @@ async function claimBlast(token) {
   return res?.ok ? res.blast || null : null;
 }
 
-const $ = (id) => document.getElementById(id);
 const video = $('video');
 const closeTabBtn = $('closeTab');
 const snoozeBtn = $('snooze');
@@ -55,9 +55,7 @@ if (isTest) {
 }
 
 function bold(text) {
-  const b = document.createElement('b');
-  b.textContent = text;
-  return b;
+  return el('b', '', text);
 }
 
 // Begging for more time is only allowed after sitting through the shame.

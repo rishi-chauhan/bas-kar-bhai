@@ -11,7 +11,6 @@
 //     blown, inject the overlay that blasts the video.
 
 import {
-  DEFAULT_SETTINGS,
   KEEP_DAYS,
   todayKey,
   hostFromUrl,
@@ -32,37 +31,32 @@ const MAX_CHUNK_MS = 2 * 60 * 1000;
 // ---------------------------------------------------------------------------
 // Setup
 
-async function ensureSetup() {
+// Runs every time the worker starts. Missing settings need no setup: every
+// reader merges in DEFAULT_SETTINGS (see getSettings).
+async function setup() {
   chrome.idle.setDetectionInterval(IDLE_AFTER_SECONDS);
-  const alarm = await chrome.alarms.get(TICK_ALARM);
-  if (!alarm) await chrome.alarms.create(TICK_ALARM, { periodInMinutes: 0.5 });
+  if (!(await chrome.alarms.get(TICK_ALARM))) await chrome.alarms.create(TICK_ALARM, { periodInMinutes: 0.5 });
   // Lets YouTube embeds play inside our pages (see lib/youtube.js).
   await chrome.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: [REFERER_RULE_ID],
     addRules: [refererRule()],
   });
 }
+const ready = setup().catch((err) => console.warn('[bas-kar-bhai] setup failed', err));
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
-  const { settings } = await chrome.storage.local.get('settings');
-  if (!settings) await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
-  await ensureSetup();
+  await ready;
   if (reason === 'install') chrome.runtime.openOptionsPage();
   refresh();
 });
-
-chrome.runtime.onStartup.addListener(() => {
-  ensureSetup();
-  refresh();
-});
-
-ensureSetup();
+chrome.runtime.onStartup.addListener(() => refresh());
 
 // ---------------------------------------------------------------------------
 // Events that can change what you're looking at
 
 chrome.tabs.onActivated.addListener(() => refresh());
-chrome.tabs.onUpdated.addListener((_tabId, info, tab) => {
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.mutedInfo?.muted) keepUnmuted(tabId);
   if (tab.active && (info.url || info.status === 'complete' || 'audible' in info)) refresh();
 });
 chrome.tabs.onRemoved.addListener(() => refresh());
@@ -76,12 +70,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // Tracking
 
 // Events arrive in bursts; run refreshes one at a time so time is never
-// counted twice.
+// counted twice. Errors are logged here, so callers never see a rejection.
 let queue = Promise.resolve();
 function serial(fn) {
-  const run = queue.then(fn);
-  queue = run.catch((err) => console.warn('[bas-kar-bhai]', err));
-  return run;
+  queue = queue.then(fn).catch((err) => console.warn('[bas-kar-bhai]', err));
+  return queue;
 }
 
 function refresh() {
@@ -158,10 +151,8 @@ async function checkLimit(active, now) {
   setBadge(active.tabId, '!!', '#ff2d55');
   if (!settings.enabled) return;
 
-  let { nag } = await chrome.storage.local.get('nag');
-  if (!nag || nag.day !== day) nag = { day, next: {} };
+  const nag = await getNag(day);
   if (now < (nag.next[limit.site] || 0)) return;
-
   nag.next[limit.site] = now + settings.nagEveryMinutes * 60000;
   await chrome.storage.local.set({ nag });
 
@@ -178,11 +169,15 @@ function setBadge(tabId, text, color) {
   if (color) chrome.action.setBadgeBackgroundColor({ tabId, color }).catch(() => {});
 }
 
+// When the blast may next fire on each site today: { day, next: { [site]: ms } }.
+async function getNag(day) {
+  const { nag } = await chrome.storage.local.get('nag');
+  return nag?.day === day ? nag : { day, next: {} };
+}
+
 async function snooze(site) {
   const settings = await getSettings();
-  const day = todayKey();
-  let { nag } = await chrome.storage.local.get('nag');
-  if (!nag || nag.day !== day) nag = { day, next: {} };
+  const nag = await getNag(todayKey());
   nag.next[site] = Date.now() + settings.snoozeMinutes * 60000;
   await chrome.storage.local.set({ nag });
 }
@@ -233,19 +228,22 @@ async function claimBlast(token, tabId) {
 // "Mute site" mid-blast.
 const UNMUTE_GUARD_MS = 90 * 1000;
 
+// `blasting` maps tab id -> until when that tab must stay unmuted.
 async function unmuteForBlast(tabId) {
+  const now = Date.now();
   const { blasting = {} } = await chrome.storage.session.get('blasting');
-  blasting[tabId] = Date.now() + UNMUTE_GUARD_MS;
+  for (const [id, until] of Object.entries(blasting)) if (until < now) delete blasting[id];
+  blasting[tabId] = now + UNMUTE_GUARD_MS;
   await chrome.storage.session.set({ blasting });
   const tab = await chrome.tabs.get(tabId);
   if (tab.mutedInfo?.muted) await chrome.tabs.update(tabId, { muted: false });
 }
 
-chrome.tabs.onUpdated.addListener(async (tabId, info) => {
-  if (!info.mutedInfo?.muted) return;
+// Called when a tab gets muted: undo it if that tab is mid-blast.
+async function keepUnmuted(tabId) {
   const { blasting = {} } = await chrome.storage.session.get('blasting');
   if ((blasting[tabId] || 0) > Date.now()) chrome.tabs.update(tabId, { muted: false }).catch(() => {});
-});
+}
 
 // If the page refuses to autoplay sound in the overlay, an offscreen
 // document (an invisible extension page) plays the audio instead.
