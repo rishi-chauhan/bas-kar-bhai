@@ -389,6 +389,21 @@ export async function waitFor(fn, { timeout = 8000, every = 200, what = 'conditi
   throw new Error(`timed out waiting for ${what} (last: ${JSON.stringify(last)})`);
 }
 
+// Open the settings page and wait until it has rendered. If it never does,
+// say what's on screen instead, so a CI-only failure can be diagnosed.
+export async function openOptions(b) {
+  const t = await b.open(`${b.base}/options/options.html`);
+  const o = await connect(t, 'options');
+  try {
+    await waitFor(() => o.ev(`document.getElementById('limits').children.length > 0`), { what: 'options render' });
+  } catch (err) {
+    const page = await o.ev(`({ href: location.href, state: document.readyState, text: (document.body?.innerText || '').slice(0, 300) })`).catch((e) => e.message);
+    const targets = (await b.targets()).map((x) => `${x.type} ${x.url}`);
+    throw new Error(`${err.message}; page: ${JSON.stringify(page)}; targets: ${JSON.stringify(targets)}`);
+  }
+  return { t, o };
+}
+
 // Is YouTube reachable? The YouTube tests skip themselves when it isn't.
 export async function online() {
   try {
