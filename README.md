@@ -55,7 +55,7 @@ Release Firefox only keeps extensions that Mozilla has signed, so until it's on 
 
 1. Download the code as above.
 2. Open `about:debugging#/runtime/this-firefox`.
-3. Click **Load Temporary Add-on…** and pick `extension/manifest.json`.
+3. Click **Load Temporary Add-on…** and pick `extension/manifest.json`. Firefox shows a warning that `"offscreen"` isn't a valid permission. That's expected: the permission is only for Chrome, Firefox skips it, and the extension works normally.
 4. The settings page opens. Set your limits, turn the volume up, and hit **Test the blast**.
 
 To update, `git pull` and click **Reload** on the extension in `about:debugging`.
@@ -67,6 +67,8 @@ Everything works the same, except:
 - **No "always on the speakers".** Firefox doesn't let extensions pick an output device for sound that plays in the background, so the blast plays on whatever you're listening on, Bluetooth headphones included. The settings page says so instead of showing the speaker picker, and it never asks for the microphone.
 - **Sound in the overlay is never blocked.** Firefox's autoplay blocking doesn't apply to the extension's overlay, so the blast plays with sound right on the page, boost included.
 - If you switch off the extension's access to all websites in `about:addons`, nothing gets tracked. The settings page warns you and has a button to turn it back on.
+
+How the Firefox support works under the hood, and what to watch out for when changing the code, is in [docs/FIREFOX.md](docs/FIREFOX.md).
 
 ## Privacy and permissions
 
@@ -109,16 +111,16 @@ extension/
   offscreen/           Chrome's hidden page for the sound (lib/player.js does the playing)
   popup/               toolbar popup
   options/             settings page
-  lib/                 shared helpers, loudness boost, YouTube player bridge, IndexedDB for custom videos, theme
+  lib/                 shared helpers, background sound player, loudness boost, YouTube player bridge, IndexedDB for custom videos, theme
   media/default.mp4    bundled blast video
   icons/
 scripts/make_assets.py regenerates the default video and icons from scratch
 tests/                 unit tests, plus browser tests that drive the real extension
 docs/                  README screenshot, Firefox support notes
-package.json           test scripts only
+package.json           test, lint and Firefox packaging scripts
 ```
 
-There's no build step and no dependencies: the `extension/` folder is loaded as-is in both browsers. `package.json` only holds the test scripts. Each browser ignores the other's manifest keys (`service_worker` vs `scripts`, `browser_specific_settings`), and the code checks for features (`chrome.offscreen`) rather than for the browser.
+There's no build step and no dependencies: the `extension/` folder is loaded as-is in both browsers. `package.json` only holds scripts for testing, linting and packaging. Each browser ignores the other's manifest keys (`service_worker` vs `scripts`, `browser_specific_settings`), and the code checks for features (`chrome.offscreen`) rather than for the browser.
 
 ### How tracking works
 
@@ -171,7 +173,7 @@ npm test
 That runs everything (about a minute). You can also run the parts on their own:
 
 - `npm run test:unit`: the pure helpers (site matching, time and YouTube link parsing, speaker picking, clip looping, settings saves). Takes under a second, no browser needed.
-- `npm run test:e2e`: loads the real extension into a headless browser and uses it the way a person would. It tracks time, goes over a limit, sits through the blast, snoozes, closes the tab, uploads a clip, picks a YouTube video, uses the popup and resets history. It also checks that websites can't trigger the overlay, and fails if any extension page logs an error.
+- `npm run test:e2e`: loads the real extension into a headless browser (Chrome over the DevTools protocol, Firefox over WebDriver BiDi) and uses it the way a person would. It tracks time, goes over a limit, sits through the blast, snoozes, closes the tab, uploads a clip, picks a YouTube video, uses the popup and resets history. It also checks that websites can't trigger the overlay, and fails if any extension page logs an error.
 
 The browser tests need a Chromium-based browser that still allows loading unpacked extensions from the command line: Chromium, [Chrome for Testing](https://developer.chrome.com/blog/chrome-for-testing) or Brave. Branded Google Chrome 137+ doesn't. They find one on your `PATH`; otherwise point `CHROME_PATH` at it:
 
@@ -190,6 +192,14 @@ npm run test:e2e:firefox
 Without a browser, those tests are skipped. The YouTube steps are skipped when YouTube can't be reached. The browser runs muted, so nothing blasts while you test.
 
 GitHub Actions runs the full suite on Chrome for Testing and on Firefox, plus the Firefox linter, on every push to `main` and on every pull request ([`.github/workflows/test.yml`](.github/workflows/test.yml)).
+
+### Packaging for Firefox Add-ons
+
+```bash
+npm run build:firefox
+```
+
+That writes a zip to `dist/` (ignored by git), ready to upload to [Firefox Add-ons](https://addons.mozilla.org/developers/). There's no build step, so no source code upload is needed. The add-on id in `manifest.json` (`browser_specific_settings.gecko.id`) becomes permanent with the first upload, so settle it before then.
 
 ## License
 
