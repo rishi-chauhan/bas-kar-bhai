@@ -12,6 +12,7 @@
 //   connect() -> { ev(expr, {gesture}), reload(), front(), acceptDialogs(), setFiles(selector, paths), close() }
 
 import { spawn, execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -83,6 +84,12 @@ export function connect(target, label = target.url) {
 // ---------------------------------------------------------------------------
 // Chrome, over the DevTools protocol
 
+// Chromium's id for an extension loaded from `dir`: the first 128 bits of the
+// SHA-256 of its path, written with the letters a-p instead of hex digits.
+export function unpackedExtensionId(dir) {
+  return [...createHash('sha256').update(dir).digest('hex').slice(0, 32)].map((c) => 'abcdefghijklmnop'[parseInt(c, 16)]).join('');
+}
+
 async function launchChrome({ autoplayBlocked = false } = {}) {
   const exe = findBrowser();
   if (!exe) throw new Error('No Chromium-based browser found. Set CHROME_PATH (see tests/e2e/browser.mjs).');
@@ -107,14 +114,16 @@ async function launchChrome({ autoplayBlocked = false } = {}) {
     const text = await (await fetch(`http://127.0.0.1:${port}${path}`, { method })).text();
     try { return JSON.parse(text); } catch { return text; }
   };
-  let extId;
-  for (let i = 0; i < 60 && !extId; i++) {
+  // An unpacked extension's id comes from its folder's path. Work it out
+  // rather than guess from the open pages: Chrome for Testing runs other
+  // extensions too, some with the same page names as ours.
+  const extId = unpackedExtensionId(EXT_DIR);
+  let loaded = false;
+  for (let i = 0; i < 60 && !loaded; i++) {
     await sleep(250);
-    // Match our own pages: the browser may run built-in extensions of its own.
-    const t = (await http('/json/list')).find((t) => /^chrome-extension:\/\/[a-p]{32}\/(background\.js|options\/options\.html)/.test(t.url));
-    extId = t && new URL(t.url).host;
+    loaded = (await http('/json/list')).some((t) => t.url.startsWith(`chrome-extension://${extId}/`));
   }
-  if (!extId) {
+  if (!loaded) {
     kill();
     throw new Error(`The extension did not load in ${exe}. Branded Google Chrome ignores --load-extension; use Chromium, Chrome for Testing or Brave.`);
   }
@@ -387,6 +396,21 @@ export async function waitFor(fn, { timeout = 8000, every = 200, what = 'conditi
     await sleep(every);
   }
   throw new Error(`timed out waiting for ${what} (last: ${JSON.stringify(last)})`);
+}
+
+// Open the settings page and wait until it has rendered. If it never does,
+// say what's on screen instead, so a CI-only failure can be diagnosed.
+export async function openOptions(b) {
+  const t = await b.open(`${b.base}/options/options.html`);
+  const o = await connect(t, 'options');
+  try {
+    await waitFor(() => o.ev(`document.getElementById('limits').children.length > 0`), { what: 'options render' });
+  } catch (err) {
+    const page = await o.ev(`({ href: location.href, state: document.readyState, text: (document.body?.innerText || '').slice(0, 300) })`).catch((e) => e.message);
+    const targets = (await b.targets()).map((x) => `${x.type} ${x.url}`);
+    throw new Error(`${err.message}; page: ${JSON.stringify(page)}; targets: ${JSON.stringify(targets)}`);
+  }
+  return { t, o };
 }
 
 // Is YouTube reachable? The YouTube tests skip themselves when it isn't.

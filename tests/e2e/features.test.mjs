@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import { copyFileSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EXT_DIR, skipReason, launch, serve, connect, waitFor, sleep, problems, online } from './browser.mjs';
+import { EXT_DIR, skipReason, launch, serve, connect, waitFor, sleep, problems, online, openOptions } from './browser.mjs';
 
 const skip = skipReason();
 const youtubeSkip = skip || ((await online()) ? false : 'YouTube is not reachable');
@@ -54,11 +54,9 @@ if (skip) {
       await connect(swT, 'service worker');
     }
 
-    const optT = await b.open(`${b.base}/options/options.html`);
-    const o = await connect(optT, 'options');
+    const { t: optT, o } = await openOptions(b);
     // Any real dialog is accepted (the reset buttons' confirm() is stubbed below for determinism).
     await o.acceptDialogs();
-    await waitFor(() => o.ev(`document.getElementById('limits').children.length > 0`), { what: 'options render' });
 
     const ev = o.ev;
     // Reload the settings page and wait for the *new* document to finish rendering.

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { skipReason, launch, serve, connect, waitFor } from './browser.mjs';
+import { skipReason, launch, serve, connect, waitFor, openOptions } from './browser.mjs';
 
 const skip = skipReason();
 
@@ -19,9 +19,7 @@ if (skip) {
   const b = await launch();
 
   try {
-    const opt = await b.open(`${b.base}/options/options.html`);
-    const o = await connect(opt, 'options');
-    await waitFor(() => o.ev(`document.getElementById('limits').children.length > 0`), { what: 'options render' });
+    const { o } = await openOptions(b);
     const real = await o.ev(`chrome.runtime.getURL('overlay/overlay.html')`);
 
     // A hostile page on a site with no limit: frames the overlay three ways and
