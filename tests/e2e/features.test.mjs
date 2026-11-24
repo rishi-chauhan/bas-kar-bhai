@@ -321,8 +321,9 @@ if (skip) {
       return { nag: s.nagEveryMinutes, snooze: s.snoozeMinutes };
     });
     await t('boost and output pickers save', async () => {
+      // Firefox hides the (empty) speaker picker, so only Chrome can change it.
       await ev(`(() => { const b = document.getElementById('boost'); b.value = '18'; b.dispatchEvent(new Event('change'));
-        const o = document.getElementById('output'); o.value = 'default'; o.dispatchEvent(new Event('change')); return true; })()`);
+        if (${b.kind === 'chrome'}) { const o = document.getElementById('output'); o.value = 'default'; o.dispatchEvent(new Event('change')); } return true; })()`);
       const s = await waitFor(async () => { const s = await settings(); return s.boostDb === 18 && s.outputMode === 'default' && s; }, { what: 'saved' });
       return { boostDb: s.boostDb, outputMode: s.outputMode, setupCardHidden: await ev(`document.getElementById('setup').hidden`) };
     });
