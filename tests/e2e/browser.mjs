@@ -110,7 +110,8 @@ async function launchChrome({ autoplayBlocked = false } = {}) {
   let extId;
   for (let i = 0; i < 60 && !extId; i++) {
     await sleep(250);
-    const t = (await http('/json/list')).find((t) => t.url.startsWith('chrome-extension://'));
+    // Match our own pages: the browser may run built-in extensions of its own.
+    const t = (await http('/json/list')).find((t) => /^chrome-extension:\/\/[a-p]{32}\/(background\.js|options\/options\.html)/.test(t.url));
     extId = t && new URL(t.url).host;
   }
   if (!extId) {
