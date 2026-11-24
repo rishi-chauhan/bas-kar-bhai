@@ -36,7 +36,8 @@ if (skip) {
       </script>`);
     const evilT = await b.open(`http://localhost:${web.port}/evil.html`);
     const evil = await connect(evilT, 'evil page');
-    await waitFor(() => evil.ev(`document.readyState === 'complete'`), { what: 'evil page load' });
+    // A new tab starts as a "complete" about:blank, so wait for the real page.
+    await waitFor(() => evil.ev(`location.pathname === '/evil.html' && document.readyState === 'complete' && !!window.probe`), { what: 'evil page load' });
 
     await test('only overlay.html is reachable from websites', async () => {
       const probe = Object.fromEntries(await evil.ev('window.probe'));
