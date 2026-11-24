@@ -32,6 +32,7 @@ https://github.com/user-attachments/assets/ae683ed9-98fa-4c89-b72c-3ecc9dd146eb
 - **Or bring your own file:** upload any video or audio clip (up to 60 MB).
 - **Badge** on the toolbar icon shows minutes left on the current site (`!!` once you're over).
 - **Popup** with today's usage, **settings page** with a 7-day history.
+- **All your computers count** (optional): turn on sync and time from every browser where you've turned it on adds up, so a 30-minute limit is 30 minutes in total. It rides on Chrome sync or Firefox Sync. There's no server of ours.
 - **Private:** everything stays in your browser. No servers, no accounts, no analytics.
 
 ## Install
@@ -68,11 +69,24 @@ Everything works the same, except:
 - **Sound in the overlay is never blocked.** Firefox's autoplay blocking doesn't apply to the extension's overlay, so the blast plays with sound right on the page, boost included.
 - If you switch off the extension's access to all websites in `about:addons`, nothing gets tracked. The settings page warns you and has a button to turn it back on.
 
+## Sync across your computers
+
+Off by default. Turn it on under **6 · All your browsers** in the settings page, on each computer.
+
+- **Chrome, Brave, Edge:** uses Chrome sync. Sign in to the browser with the same account on each computer and keep **Extensions** turned on in its sync settings.
+- **Firefox:** uses Firefox Sync. Sign in with the same Mozilla account and keep **Add-ons** ticked under Settings › Sync. Firefox syncs every few minutes, so time from other computers shows up with a delay.
+- Chrome and Firefox can't see each other's time. Each one only syncs with itself.
+- The extension has to have the same id on every computer for the browser to match its data up. Installs from a store always do. Unpacked Chrome installs get an id from the folder's location, so they only match if the folder sits at the same path (see [Chrome's docs on the `key` field](https://developer.chrome.com/docs/extensions/reference/manifest/key)). On Firefox the id is fixed in the manifest.
+
+Each computer shares only its own last 7 days of per-site time, about once a minute, and every computer adds up the others. "Reset today" and "Delete all history" reach every computer. Turning sync off takes that computer's time out of the others' totals. The settings page lists every computer, with a button to remove one you no longer use.
+
 How the Firefox support works under the hood, and what to watch out for when changing the code, is in [docs/FIREFOX.md](docs/FIREFOX.md).
 
 ## Privacy and permissions
 
 Nothing you do is sent anywhere. There are no servers, accounts, analytics or trackers. Your usage history and settings live in `chrome.storage.local`, and your uploaded clip lives in the extension's IndexedDB. Both are deleted when you remove the extension.
+
+The one exception is [sync](#sync-across-your-computers), and only if you turn it on. Then your last 7 days of per-site time go into `chrome.storage.sync`, which your browser carries to your other computers through your own Chrome or Firefox account, the same way it carries your bookmarks. Settings and videos are never synced.
 
 The only network requests the extension makes are to YouTube, and only if you choose a YouTube video for the blast (to show its title and to play it).
 
@@ -111,6 +125,7 @@ extension/
   offscreen/           Chrome's hidden page for the sound (lib/player.js does the playing)
   popup/               toolbar popup
   options/             settings page
+  lib/sync.js          sharing time between your computers through the browser's own sync
   lib/                 shared helpers, background sound player, loudness boost, YouTube player bridge, IndexedDB for custom videos, theme
   media/default.mp4    bundled blast video
   icons/
@@ -127,6 +142,10 @@ There's no build step and no dependencies: the `extension/` folder is loaded as-
 The worker remembers which site is in front of you and since when (`chrome.storage.session`). On every tab switch, URL change, window focus change, idle change, and on a 30-second alarm, it credits the elapsed time to that site, then checks its limit. Single chunks are capped at 2 minutes, so a laptop that slept on YouTube doesn't come back with 8 hours of "usage".
 
 Data lives in `chrome.storage.local` (settings and per-day usage, kept for 30 days). Custom videos live in the extension's IndexedDB.
+
+### How sync works
+
+Each browser gets a random device id and keeps tracking into its own local usage. With sync on, it copies its last 7 days into one `chrome.storage.sync` item, `d:<device id>`, at most once a minute, trimmed to fit the browsers' 8 KB-per-item cap. It never writes another device's item, so devices can't overwrite each other or count time twice. Limits, the popup and the history add the other devices' items to the local usage. A reset is a `reset` marker in sync storage that each device applies to its own usage. Until a device has done that, its older numbers are ignored. Details are in `extension/lib/sync.js`.
 
 ### Why YouTube needs `declarativeNetRequest`
 

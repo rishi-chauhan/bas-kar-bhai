@@ -140,6 +140,24 @@
       <div id="history" class="history"></div>
     </section>
 
+    <section class="card" id="syncCard">
+      <h2>6 · All your browsers</h2>
+      <p class="muted">Use more than one computer? Add up the time from all of them, so a limit is a limit everywhere.
+        We don't run a server: your browser's own sync carries the numbers, along with your bookmarks.</p>
+      <label class="check"><input id="syncEnabled" type="checkbox" /> Count time from all my browsers</label>
+      <p id="syncHowTo" class="note"></p>
+      <p id="syncError" class="error" hidden></p>
+      <div id="syncBody" hidden>
+        <label class="field">This browser's name
+          <input id="deviceName" type="text" maxlength="40" autocomplete="off" />
+        </label>
+        <ul id="devices" class="devices"></ul>
+        <p id="noDevices" class="muted">No other browsers yet. Turn this on in Bas Kar Bhai on your other computers.</p>
+        <small class="muted">Each browser shares its last 7 days, about once a minute. Turning this off takes this
+          browser's time out of everyone else's totals.</small>
+      </div>
+    </section>
+
     <section class="card danger-zone">
       <h2>Reset</h2>
       <div class="row">
@@ -148,7 +166,7 @@
       </div>
     </section>
 
-    <footer class="muted">Your data never leaves this browser.</footer>
+    <footer class="muted" id="privacy">Your data never leaves this browser.</footer>
   </div>
   <div id="toast" class="toast" role="status" hidden></div>
   <script type="module" src="options.js"></script>

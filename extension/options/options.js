@@ -2,7 +2,6 @@ import {
   DEFAULT_SETTINGS,
   getSettings,
   saveSettings,
-  getUsage,
   todayKey,
   normalizeSite,
   secondsForSite,
@@ -14,6 +13,7 @@ import { parseYouTubeUrl, parseTime, fetchVideoInfo, createPlayer } from '../lib
 import { loopClip } from '../lib/loop.js';
 import { BOOST_LEVELS, pickSpeaker, currentOutputs, requestOutputs, micPermission } from '../lib/loudness.js';
 import { $, el } from '../lib/dom.js';
+import { getCombinedUsage, getSyncState, listDevices, SYNC_SERVICE } from '../lib/sync.js';
 
 const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
 const QUICK_ADD = [
@@ -371,7 +371,7 @@ $('enabled').addEventListener('change', (e) => update({ enabled: e.target.checke
 // History
 
 async function renderHistory() {
-  const usage = await getUsage();
+  const usage = await getCombinedUsage();
   const days = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
@@ -429,21 +429,102 @@ function dayLabel(date, isToday) {
 // ---------------------------------------------------------------------------
 // Reset
 
+// With sync on, a reset reaches every browser (see lib/sync.js).
+async function reset(kind) {
+  const res = await chrome.runtime.sendMessage({ type: 'BKB_RESET', kind });
+  if (!res?.ok) throw new Error(res?.error || 'no answer');
+}
+
 $('resetToday').addEventListener('click', async () => {
-  if (!confirm("Reset today's tracked time? Your limits start fresh.")) return;
-  const usage = await getUsage();
-  delete usage[todayKey()];
-  await chrome.storage.local.set({ usage, nag: null });
+  const everywhere = (await getSyncState()).enabled ? ' on all your browsers' : '';
+  if (!confirm(`Reset today's tracked time${everywhere}? Your limits start fresh.`)) return;
+  try {
+    await reset('today');
+    toast("Today's time wiped. Fresh start, don't waste it.");
+  } catch (err) {
+    toast(`Couldn't reset: ${err.message}`);
+  }
   renderHistory();
-  toast("Today's time wiped. Fresh start, don't waste it.");
+  renderSync();
 });
 
 $('resetAll').addEventListener('click', async () => {
-  if (!confirm('Delete ALL tracked history? This cannot be undone.')) return;
-  await chrome.storage.local.set({ usage: {}, nag: null });
+  const everywhere = (await getSyncState()).enabled ? ' from all your browsers' : '';
+  if (!confirm(`Delete ALL tracked history${everywhere}? This cannot be undone.`)) return;
+  try {
+    await reset('all');
+    toast('History deleted');
+  } catch (err) {
+    toast(`Couldn't delete: ${err.message}`);
+  }
   renderHistory();
-  toast('History deleted');
+  renderSync();
 });
+
+// ---------------------------------------------------------------------------
+// Sync across browsers
+
+$('syncHowTo').textContent = SYNC_SERVICE === 'Firefox Sync'
+  ? 'Uses Firefox Sync. On each computer, sign in to Firefox with the same Mozilla account and keep "Add-ons" ticked in ' +
+    'Settings › Sync. Firefox syncs every few minutes, so time from other computers shows up with a short delay. ' +
+    'Chrome and Firefox can\'t see each other\'s time.'
+  : 'Uses Chrome sync. On each computer, sign in to Chrome with the same Google account and keep "Extensions" ' +
+    'turned on under Settings › You and Google › Sync. Firefox and Chrome can\'t see each other\'s time.';
+
+async function renderSync() {
+  const state = await getSyncState();
+  $('syncEnabled').checked = state.enabled;
+  $('syncBody').hidden = !state.enabled;
+  if (document.activeElement !== $('deviceName')) $('deviceName').value = state.name || '';
+  $('privacy').textContent = state.enabled
+    ? `Your tracked time travels through ${SYNC_SERVICE} to your other browsers, and nowhere else.`
+    : 'Your data never leaves this browser.';
+  showError('syncError', state.enabled && state.error ? `Last sync failed: ${state.error}` : '');
+  if (!state.enabled) return;
+
+  const devices = await listDevices();
+  $('devices').replaceChildren(
+    ...devices.map((d) => {
+      const li = el('li');
+      const who = el('span', 'site', d.name);
+      const when = el('span', 'muted', d.self ? 'this browser' : `synced ${ago(d.seen)}`);
+      const time = el('span', 'time', `${formatDuration(d.today)} today`);
+      li.append(who, when, time);
+      if (!d.self) {
+        const forget = el('button', 'ghost small', 'Remove');
+        forget.type = 'button';
+        forget.title = "Stop counting this browser's time. It comes back if it's still syncing.";
+        forget.addEventListener('click', async () => {
+          if (!confirm(`Stop counting time from "${d.name}"? If it's still syncing, it will show up again.`)) return;
+          await chrome.runtime.sendMessage({ type: 'BKB_SYNC_FORGET', id: d.id });
+          renderSync();
+          renderHistory();
+        });
+        li.append(forget);
+      }
+      return li;
+    })
+  );
+  $('noDevices').hidden = devices.length > 1;
+}
+
+function ago(ms) {
+  const mins = Math.round((Date.now() - ms) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
+}
+
+async function configureSync(patch) {
+  const res = await chrome.runtime.sendMessage({ type: 'BKB_SYNC_CONFIGURE', ...patch });
+  if (!res?.ok) showError('syncError', `Couldn't change sync: ${res?.error || 'no answer'}`);
+  renderSync();
+  renderHistory();
+}
+
+$('syncEnabled').addEventListener('change', (e) => configureSync({ enabled: e.target.checked }));
+$('deviceName').addEventListener('change', (e) => configureSync({ name: e.target.value }));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -482,6 +563,12 @@ function toast(text) {
 
 // Keep in sync if the popup flips the switch while this page is open.
 chrome.storage.onChanged.addListener((changes, area) => {
+  // Another browser shared new numbers, or reset them.
+  if (area === 'sync') {
+    renderSync();
+    renderHistory();
+  }
+  if (area === 'local' && changes.sync) renderSync();
   if (area === 'local' && changes.settings) {
     settings = { ...DEFAULT_SETTINGS, ...changes.settings.newValue };
     renderBehaviour();
@@ -494,3 +581,4 @@ renderBehaviour();
 renderVideo();
 renderLoudness();
 renderHistory();
+renderSync();

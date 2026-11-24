@@ -202,9 +202,6 @@ function playYouTube(yt) {
   setTimeout(unlockSnooze, 60000);
 }
 
-if (settings.video === 'youtube' && settings.youtube?.id) playYouTube(settings.youtube);
-else await playFile(settings.video);
-
 // --- Buttons --------------------------------------------------------------
 function stopEverything() {
   video.pause();
@@ -233,3 +230,8 @@ snoozeBtn.addEventListener('click', async () => {
 });
 
 closeTabBtn.focus();
+
+// Start the video only now that the buttons work: setting up sound can hang
+// (say, on a computer with no audio device) and must never trap you here.
+if (settings.video === 'youtube' && settings.youtube?.id) playYouTube(settings.youtube);
+else playFile(settings.video).catch((err) => console.warn('[bas-kar-bhai] playback failed', err));
