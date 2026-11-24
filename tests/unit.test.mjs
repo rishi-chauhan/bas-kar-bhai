@@ -183,3 +183,73 @@ test('saveSettings keeps both of two back-to-back changes', async () => {
     delete globalThis.chrome.storage;
   }
 });
+
+// --- sync across browsers (lib/sync.js)
+
+const sync = await lib('sync.js');
+const NOW = new Date(2026, 10, 24, 15, 0).getTime();
+const DAY = (ago) => common.todayKey(new Date(NOW - ago * 86400000));
+
+test('snapshot shares the last 7 days in whole seconds', () => {
+  const usage = { [DAY(0)]: { 'a.com': 10.4, 'b.com': 0.2 }, [DAY(6)]: { 'c.com': 5 }, [DAY(7)]: { 'old.com': 99 } };
+  const item = sync.snapshot(usage, { id: 'me', name: 'Laptop' }, NOW);
+  assert.deepEqual(item, { name: 'Laptop', seen: NOW, days: { [DAY(0)]: { 'a.com': 10 }, [DAY(6)]: { 'c.com': 5 } } });
+});
+
+test('snapshot fits in one sync item: oldest days go first, then the smallest sites', () => {
+  const big = (n, secs) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`site-number-${i}.example.com`, secs + i]));
+  const usage = {};
+  for (let i = 0; i < 7; i++) usage[DAY(i)] = big(60, 100);
+  const item = sync.snapshot(usage, { id: 'me', name: 'Laptop' }, NOW);
+  assert.ok(sync.itemBytes('d:me', item) <= sync.ITEM_BUDGET);
+  assert.ok(item.days[DAY(0)], 'today is kept');
+  assert.ok(!item.days[DAY(6)], 'the oldest day went first');
+
+  // Even today alone too big: the biggest sites survive.
+  const huge = sync.snapshot({ [DAY(0)]: big(400, 100) }, { id: 'me', name: 'x' }, NOW);
+  const kept = Object.keys(huge.days[DAY(0)]);
+  assert.ok(sync.itemBytes('d:me', huge) <= sync.ITEM_BUDGET && kept.length > 50 && kept.length < 400);
+  assert.ok(kept.includes('site-number-399.example.com') && !kept.includes('site-number-0.example.com'));
+});
+
+test('combine adds other devices, never this one, and skips non-device keys', () => {
+  const local = { [DAY(0)]: { 'a.com': 10 } };
+  const items = {
+    'd:me': { seen: NOW, days: { [DAY(0)]: { 'a.com': 999 } } },
+    'd:pc': { seen: NOW, days: { [DAY(0)]: { 'a.com': 5, 'b.com': 7 }, [DAY(1)]: { 'a.com': 1 } } },
+    'd:broken': null,
+    other: { days: { [DAY(0)]: { 'a.com': 1000 } } },
+  };
+  const out = sync.combine(local, items, { id: 'me' });
+  assert.deepEqual(out, { [DAY(0)]: { 'a.com': 15, 'b.com': 7 }, [DAY(1)]: { 'a.com': 1 } });
+  assert.deepEqual(local, { [DAY(0)]: { 'a.com': 10 } }, 'local usage is not modified');
+});
+
+test('a reset hides data from before it until each device applies it', () => {
+  const local = { [DAY(0)]: { 'a.com': 10 }, [DAY(1)]: { 'a.com': 3 } };
+  const items = {
+    reset: { today: { day: DAY(0), at: NOW } },
+    'd:stale': { seen: NOW - 1000, days: { [DAY(0)]: { 'a.com': 50 }, [DAY(1)]: { 'a.com': 4 } } },
+    'd:fresh': { seen: NOW + 1000, days: { [DAY(0)]: { 'a.com': 2 } } },
+  };
+  assert.deepEqual(sync.combine(local, items, { id: 'me', applied: 0 }), { [DAY(1)]: { 'a.com': 7 }, [DAY(0)]: { 'a.com': 2 } });
+  assert.deepEqual(sync.combine(local, items, { id: 'me', applied: NOW }), { [DAY(0)]: { 'a.com': 12 }, [DAY(1)]: { 'a.com': 7 } });
+  // "Delete all" hides every day from before it.
+  items.reset.all = NOW + 500;
+  assert.deepEqual(sync.combine(local, items, { id: 'me', applied: NOW }), { [DAY(0)]: { 'a.com': 2 } });
+});
+
+test('applyReset wipes what the marker says, once', () => {
+  const usage = { [DAY(0)]: { 'a.com': 10 }, [DAY(1)]: { 'a.com': 3 } };
+  assert.equal(sync.applyReset(usage, undefined, 0), null);
+  assert.deepEqual(sync.applyReset(usage, { today: { day: DAY(0), at: 5 } }, 0), { usage: { [DAY(1)]: { 'a.com': 3 } }, applied: 5 });
+  assert.equal(sync.applyReset(usage, { today: { day: DAY(0), at: 5 } }, 5), null, 'already applied');
+  assert.deepEqual(sync.applyReset(usage, { all: 9, today: { day: DAY(0), at: 5 } }, 5), { usage: {}, applied: 9 });
+});
+
+test('defaultDeviceName names the browser and the OS', () => {
+  assert.equal(sync.defaultDeviceName('Linux x86_64'), 'Chrome on Linux');
+  assert.equal(sync.defaultDeviceName('macOS'), 'Chrome on Mac');
+  assert.equal(sync.defaultDeviceName('Win32'), 'Chrome on Windows');
+  assert.equal(sync.defaultDeviceName(''), 'Chrome on a computer');
+});

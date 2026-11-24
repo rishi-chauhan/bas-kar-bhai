@@ -19,6 +19,16 @@ import {
   getSettings,
   getUsage,
 } from './lib/common.js';
+import {
+  RESET_KEY,
+  ensureDevice,
+  getCombinedUsage,
+  maybePush,
+  applyPendingReset,
+  configureSync,
+  forgetDevice,
+  resetUsage,
+} from './lib/sync.js';
 import { refererRule, REFERER_RULE_ID } from './lib/youtube.js';
 
 const TICK_ALARM = 'bkb-tick';
@@ -35,6 +45,7 @@ const MAX_CHUNK_MS = 2 * 60 * 1000;
 // reader merges in DEFAULT_SETTINGS (see getSettings).
 async function setup() {
   chrome.idle.setDetectionInterval(IDLE_AFTER_SECONDS);
+  await ensureDevice();
   if (!(await chrome.alarms.get(TICK_ALARM))) await chrome.alarms.create(TICK_ALARM, { periodInMinutes: 0.5 });
   // Lets YouTube embeds play inside our pages (see lib/youtube.js).
   await chrome.declarativeNetRequest.updateDynamicRules({
@@ -65,6 +76,10 @@ chrome.idle.onStateChanged.addListener(() => refresh());
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === TICK_ALARM) refresh();
 });
+// Another browser pressed "reset" (see lib/sync.js).
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && changes[RESET_KEY]) serial(applyPendingReset);
+});
 
 // ---------------------------------------------------------------------------
 // Tracking
@@ -77,10 +92,18 @@ function serial(fn) {
   return queue;
 }
 
+// Same queue, but the caller sees the result or the error.
+function queued(fn) {
+  const run = queue.then(fn);
+  queue = run.catch((err) => console.warn('[bas-kar-bhai]', err));
+  return run;
+}
+
 function refresh() {
   return serial(async () => {
     const now = Date.now();
     await flush(now);
+    await maybePush(now);
     const active = await detectActive();
     await chrome.storage.session.set({ current: active ? { ...active, since: now } : null });
     if (active) await checkLimit(active, now);
@@ -142,7 +165,8 @@ async function checkLimit(active, now) {
   }
 
   const day = todayKey(new Date(now));
-  const used = secondsForSite((await getUsage())[day], limit.site);
+  // Time from your other browsers counts too, when sync is on.
+  const used = secondsForSite((await getCombinedUsage())[day], limit.site);
   const left = limit.minutes * 60 - used;
   if (left > 0) {
     setBadge(active.tabId, `${Math.ceil(left / 60)}m`, '#1f1f1f');
@@ -316,6 +340,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return reply(claimBlast(String(msg.token || ''), sender.tab?.id));
     case 'BKB_REFRESH':
       return reply(refresh());
+    case 'BKB_SYNC_CONFIGURE':
+      return reply(queued(() => configureSync({ enabled: msg.enabled, name: msg.name })));
+    case 'BKB_SYNC_FORGET':
+      return reply(queued(() => forgetDevice(String(msg.id || ''))));
+    case 'BKB_RESET':
+      return reply(queued(() => resetUsage(msg.kind === 'all' ? 'all' : 'today')));
     case 'BKB_SNOOZE':
       return reply(snooze(msg.site));
     case 'BKB_CLOSE_TAB':

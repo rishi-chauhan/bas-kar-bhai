@@ -140,3 +140,20 @@ select {
 .setup button { background: #141414; color: var(--yellow); }
 .output-status { margin: 4px 0 8px; font-weight: 700; }
 .output-status.warn { color: var(--red); }
+
+/* Sync across browsers */
+.field > input[type="text"] { justify-self: start; width: min(100%, 320px); }
+.devices { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
+.devices li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 10px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.devices .site { font-weight: 800; overflow-wrap: anywhere; }
+.devices .time { margin-left: auto; font-variant-numeric: tabular-nums; }
+#noDevices { margin: 0 0 10px; }

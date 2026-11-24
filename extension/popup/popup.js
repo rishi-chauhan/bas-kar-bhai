@@ -1,23 +1,24 @@
 import {
   getSettings,
   saveSettings,
-  getUsage,
   todayKey,
   secondsForSite,
   siteMatches,
   formatDuration,
 } from '../lib/common.js';
 import { micPermission } from '../lib/loudness.js';
+import { getCombinedUsage, listDevices } from '../lib/sync.js';
 import { $, el } from '../lib/dom.js';
 
 async function render() {
   // Ask the worker to credit the last few seconds before we read.
   await chrome.runtime.sendMessage({ type: 'BKB_REFRESH' }).catch(() => {});
-  const [settings, usage] = await Promise.all([getSettings(), getUsage()]);
+  const [settings, usage, devices] = await Promise.all([getSettings(), getCombinedUsage(), listDevices()]);
   const today = usage[todayKey()] || {};
 
   $('enabled').checked = settings.enabled;
   $('speakerNotice').hidden = settings.outputMode === 'default' || (await micPermission()) === 'granted';
+  $('totalLabel').textContent = devices.length > 1 ? `Tracked today, on ${devices.length} browsers` : 'Tracked today';
   $('total').textContent = formatDuration(Object.values(today).reduce((a, b) => a + b, 0));
 
   // Limits, worst offenders first.

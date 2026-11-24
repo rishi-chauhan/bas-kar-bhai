@@ -92,10 +92,12 @@ export function formatDuration(totalSeconds) {
   return `${s}s`;
 }
 
+export const IS_FIREFOX = chrome.runtime.getURL('').startsWith('moz-extension:');
+
 // Firefox never lists audio devices to a page that isn't on screen (the
 // background page, where the sound plays), so there the blast can only use
 // whatever output is current.
-export const CAN_PICK_OUTPUT = !chrome.runtime.getURL('').startsWith('moz-extension:');
+export const CAN_PICK_OUTPUT = !IS_FIREFOX;
 
 export async function getSettings() {
   const { settings } = await chrome.storage.local.get('settings');

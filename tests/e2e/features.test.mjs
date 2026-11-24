@@ -453,6 +453,56 @@ if (skip) {
       return check(todayTotal !== '0s' && afterToday['2000-01-01'] && asked.length === 2 && /today/i.test(asked[0]) && /ALL/.test(asked[1]), 'reset', { todayTotal, asked });
     });
 
+    // --- sync across browsers. The "other computer" is faked by writing its
+    // item into chrome.storage.sync, the way that browser's sync would.
+    await t('sync: time from other browsers counts, resets reach them, off takes yours out', async () => {
+      await b.activate(optT.id); await o.front();
+      const syncItems = () => ev(`chrome.storage.sync.get(null)`);
+      const deviceRows = () => ev(`[...document.querySelectorAll('#devices li')].map((li) => li.textContent)`);
+      const footer = () => ev(`document.getElementById('privacy').textContent`);
+      const offFooter = await footer();
+      const hiddenBefore = await ev(`document.getElementById('syncBody').hidden`);
+
+      await ev(`(() => { const c = document.getElementById('syncEnabled'); c.checked = true; c.dispatchEvent(new Event('change')); return true; })()`);
+      const me = (await local('sync')).id;
+      await waitFor(async () => (await syncItems())['d:' + me], { what: 'own sync item' });
+      const onFooter = await footer();
+
+      const day = await today();
+      await ev(`chrome.storage.sync.set({ 'd:other': { name: 'Work desktop', seen: Date.now(), days: { '${day}': { '${LIMITED}': 9000 } } } }).then(() => true)`);
+      const rows = await waitFor(async () => { const r = await deviceRows(); return r.length === 2 && r; }, { what: 'other device listed' });
+      const history = await waitFor(async () => {
+        const t = await ev(`[...document.querySelectorAll('#history .day')].pop().querySelector('.total').textContent`);
+        return t.startsWith('2h') && t;
+      }, { what: 'combined history' });
+
+      // Over the limit only because of the other computer: the badge says so.
+      await setSettings({ enabled: false });
+      const pg = await openPage();
+      await refresh();
+      const overBadge = await waitFor(async () => (await badge(pg.tabId)) === '!!' && '!!', { what: 'badge from combined time' });
+      await b.close(pg.t.id);
+      await b.activate(optT.id); await o.front();
+
+      // Reset today: the marker goes out and the other computer's old time stops counting.
+      await ev(`window.confirm = () => true, true`);
+      await ev(`document.getElementById('resetToday').click(), true`);
+      await waitFor(async () => (await syncItems()).reset?.today?.day === day, { what: 'reset marker' });
+      const afterReset = await waitFor(async () => { const r = await deviceRows(); return /Work desktop.*0s today/.test(r[1]) && r; }, { what: 'other device reset' });
+
+      // Remove it, then turn sync off: our item leaves sync storage too.
+      await ev(`document.querySelector('#devices li button').click(), true`);
+      await waitFor(async () => !(await syncItems())['d:other'] && (await deviceRows()).length === 1, { what: 'device removed' });
+      await ev(`(() => { const c = document.getElementById('syncEnabled'); c.checked = false; c.dispatchEvent(new Event('change')); return true; })()`);
+      await waitFor(async () => !(await syncItems())['d:' + me], { what: 'own item removed' });
+      const backFooter = await waitFor(async () => { const f = await footer(); return /never leaves/.test(f) && f; }, { what: 'footer back' });
+      await setSettings({ enabled: true });
+
+      return check(hiddenBefore && /never leaves/.test(offFooter) && /travels through (Chrome sync|Firefox Sync)/.test(onFooter)
+        && /this browser/.test(rows[0]) && /Work desktop/.test(rows[1]) && overBadge && afterReset && backFooter,
+        'sync', { offFooter, onFooter, rows, history });
+    });
+
     await t('no errors or warnings in any extension page or the service worker', async () => {
       const seenProblems = [...new Set(problems)];
       return check(seenProblems.length === 0, 'problems seen', seenProblems);

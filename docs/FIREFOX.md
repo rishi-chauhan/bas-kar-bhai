@@ -23,7 +23,8 @@ want a different one.
 
 ## What's different in the code
 
-The code checks for features, not for browser names, except for `CAN_PICK_OUTPUT`.
+The code checks for features, not for browser names, except for `IS_FIREFOX` in `lib/common.js`
+(used for `CAN_PICK_OUTPUT` and for naming the sync service in the UI).
 
 - **Background sound** (`lib/player.js`). Chrome plays it in an offscreen document.
   Firefox has no offscreen documents, but its background page has a DOM, so
@@ -53,6 +54,14 @@ The code checks for features, not for browser names, except for `CAN_PICK_OUTPUT
 - **Test preview** (`overlay.js`). Firefox has no `location.ancestorOrigins`, so the
   "is my parent one of our pages?" check falls back to reading the parent's origin,
   which throws for any other site.
+- **Sync across computers** (`lib/sync.js`). Both browsers have `storage.sync` with the
+  same limits (100 KB in total, 8 KB per item, 512 items), so the code is the same. On
+  Firefox, the data travels with Firefox Sync when the user is signed in and "Add-ons"
+  is ticked in the sync settings. Firefox matches the data up by add-on id, which is why
+  the id in `browser_specific_settings` matters. Without an account, `storage.sync`
+  still works, just locally, and that's what the tests use. Firefox syncs on its own
+  schedule (every few minutes), not right away like Chrome. Chrome and Firefox never
+  see each other's data.
 - **Site access** (options page). Firefox lets users switch off "access to all
   websites" in `about:addons`. When that happens the options page shows a card with a
   button to turn it back on.
@@ -90,5 +99,7 @@ CI runs the suite on Chrome for Testing and on Firefox stable, then runs `web-ex
 
 - Publish on Firefox Add-ons: `npm run build:firefox` makes the zip in `dist/`. No
   source upload is needed because there's no build step.
+- Manual check with two real computers signed in to the same Mozilla account: sync
+  (the tests only cover one browser, with the other computer's data faked).
 - Manual check on real hardware: Bluetooth headphones connected, blast on Firefox
   (expected: it plays in the headphones, as the settings page says).
