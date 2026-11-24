@@ -43,6 +43,12 @@ jobs:
           echo "$out"
           echo "FIREFOX_PATH=$(echo "$out" | tail -n1 | cut -d' ' -f2-)" >> "$GITHUB_ENV"
 
+      # On Linux, Firefox plays H.264/AAC (the bundled clip) through the
+      # system's ffmpeg libraries, which the runner doesn't have.
+      - name: Install video codecs for Firefox
+        if: matrix.browser == 'firefox'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       # Ubuntu 24.04 blocks the unprivileged user namespaces the browsers' sandboxes need.
       - name: Allow the browser sandbox
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
